@@ -1,0 +1,3097 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HKT Social Utilization Dashboard (URL ONLY)</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    .toast-enter { transform: translateY(8px); opacity: 0; }
+    .toast-enter-active { transform: translateY(0); opacity: 1; transition: all .18s ease; }
+    .toast-exit-active { opacity: 0; transition: opacity .18s ease; }
+    .chip-active { background: rgb(15 23 42); color: white; border-color: rgb(15 23 42); }
+  
+    /* Executive KPI Bar + hover */
+    .kpi-card { transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(15,23,42,.10); border-color: rgba(15,23,42,.12); }
+    .pill-btn { transition: transform 140ms ease, box-shadow 140ms ease; }
+    .pill-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 18px rgba(15,23,42,.08); }
+
+  
+    body { font-family: 'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR',system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+</style>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+body {
+  font-family: 'Inter', sans-serif;
+  color: #1e293b;
+  letter-spacing: -0.2px;
+}
+
+h1, h2, h3 {
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: #0f172a;
+}
+
+ul li {
+  font-weight: 500;
+  margin-bottom: 10px;
+  line-height: 1.75;
+}
+
+b, strong {
+  font-weight: 600;
+}
+
+.percent {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.ref {
+  font-size: 13px;
+  color: #94a3b8;
+}
+</style>
+
+
+<style>
+html, body, .font-sans, * {
+  font-family: 'Inter', sans-serif !important;
+}
+</style>
+
+
+<style>
+/* HQ Pillar 그래프 높이 조정 (Top3와 비슷하게) */
+#reportPillarChart {
+  max-height: 260px !important;
+}
+</style>
+
+
+<style>
+/* Report Ref2 HQ vs Local chart size */
+#reportRef2HqLocalStackChart{max-height:320px !important;}
+</style>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</head>
+
+<body class="min-h-screen bg-slate-50 text-slate-900">
+<header class="border-b bg-white/70 backdrop-blur sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">HKT Social Utilization Dashboard</h1>
+      <p class="text-xs text-slate-500 mt-0.5">
+        17개국 파싱 · Summary 자동 생성 · 10% 미만 Warning · Country 30%/10% 기준선 · Group 비중(%) · Contents Top3(Ref4 URL)
+      </p>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="monthBadge" class="hidden text-xs font-medium bg-blue-50 text-blue-700 px-3 py-1 rounded-full"></span>
+</div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-6">
+  <!-- Upload -->
+  <section id="uploadView" class="max-w-xl mx-auto mt-14">
+    <div class="text-center mb-8">
+      <h2 class="text-2xl font-bold mb-2">엑셀 파일 업로드</h2>
+      <p class="text-sm text-slate-500 leading-relaxed">
+        <b>Ref1.Utilization Status-Detail</b> 시트 기반으로 자동 분석합니다.<br/>
+        Contents Top3는 <b>월간 토글에서만</b> 표시됩니다.
+      </p>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border p-5 space-y-3">
+      <div>
+        <label class="block text-sm font-medium mb-2">파일 선택</label>
+        <input id="fileInput" type="file" accept=".xlsx,.xls"
+               class="block w-full text-sm file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-white hover:file:bg-slate-800" />
+      </div>
+
+      <div class="flex items-center gap-2 text-xs text-slate-500">
+        <span class="inline-block w-2 h-2 rounded-full bg-slate-300"></span>
+        <span>지원: .xlsx / .xls</span>
+        <span class="ml-auto" id="loadingText"></span>
+      </div>
+
+      <details class="text-xs text-slate-500">
+        <summary class="cursor-pointer select-none">파싱 규칙</summary>
+        <div class="mt-2 leading-relaxed">
+          - 누적 Pillar: AC~AG / 누적 Total: AH<br/>
+          - 월간 Pillar: AI~AM / 월간 Total: AN<br/>
+          - Group(누적): E / Group(월간): AO<br/>
+          - Summary overall: AB45, AJ2, K46/AB46, Q46/AJ3<br/>
+          - Contents Top3: (Ref1) AP88~AP90 이름 / AO88~AO90 사용률<br/>
+          - Contents match: (Ref4.HQ Distribution Contents M) <b>컨텐츠명=C열</b><br/>
+          - Contents URL: (Ref4) <b>J열 하이퍼링크 Target 우선</b>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Dashboard -->
+  <section id="dashboardView" class="hidden space-y-4">
+
+    <!-- Controls (Executive KPI Bar) -->
+    <div class="bg-white/90 backdrop-blur border border-slate-200 rounded-3xl shadow-sm p-4 md:p-5">
+      <div class="flex items-center justify-between gap-4 flex-wrap">
+
+        <!-- LEFT: KPI cards + mode toggle -->
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="kpi-card bg-white border border-slate-200 rounded-2xl px-5 py-4 min-w-[140px]">
+            <div class="text-xs font-bold text-slate-500">매칭 국가 수</div>
+            <div class="text-2xl font-extrabold text-slate-900 mt-1" id="countryCount">-</div>
+          </div>
+
+          <div class="kpi-card bg-white border border-slate-200 rounded-2xl px-5 py-4 min-w-[140px]">
+            <div class="text-xs font-bold text-slate-500">누적 활용률</div>
+            <div class="text-2xl font-extrabold text-slate-900 mt-1" id="cumUtil">-</div>
+          </div>
+
+          <div class="kpi-card bg-white border border-slate-200 rounded-2xl px-5 py-4 min-w-[140px]">
+            <div class="text-xs font-bold text-slate-500">월간 활용률</div>
+            <div class="text-2xl font-extrabold text-slate-900 mt-1" id="monUtil">-</div>
+          </div>
+
+          <div class="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-2xl px-3 py-3">
+            <span class="text-xs font-bold text-slate-600">모드</span>
+            <div class="flex bg-white border border-slate-200 rounded-full p-1">
+              <button id="modeCumBtn" class="pill-btn text-xs font-bold rounded-full px-4 py-2 hover:bg-slate-50">누적</button>
+              <button id="modeMonBtn" class="pill-btn text-xs font-bold rounded-full px-4 py-2 hover:bg-slate-50 chip-active">월간</button>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-2xl px-3 py-3">
+            <span class="text-xs font-bold text-slate-600">보기</span>
+            <div class="flex bg-white border border-slate-200 rounded-full p-1">
+              <button id="viewDashBtn" class="pill-btn text-xs font-bold rounded-full px-4 py-2 hover:bg-slate-50 chip-active">대시보드</button>
+              <button id="viewReportBtn" class="pill-btn text-xs font-bold rounded-full px-4 py-2 hover:bg-slate-50">리포트</button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT: search + file + actions -->
+        <div class="flex items-center gap-3 flex-wrap justify-end">
+          <div class="w-72">
+            <input id="searchInput" placeholder="국가 검색"
+                   class="w-full rounded-2xl border bg-white px-4 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200" />
+          </div>
+
+          <input id="fileInputSmall" type="file" accept=".xlsx,.xls" class="hidden" />
+          <button id="filePickBtn" class="pill-btn bg-slate-900 text-white px-4 py-2 rounded-2xl text-sm font-extrabold">
+            파일 선택
+          </button>
+          <span id="fileNameLabel" class="text-sm font-semibold text-slate-500">선택된 파일 없음</span>
+
+          <button id="downloadCsvBtn" class="pill-btn text-xs rounded-2xl border px-4 py-2 hover:bg-slate-50 bg-white shadow-sm">
+            CSV 다운로드
+          </button>
+
+          <button id="resetBtn" class="pill-btn text-xs rounded-2xl border px-4 py-2 hover:bg-slate-50 bg-white shadow-sm">
+            초기화
+          </button>
+        </div>
+      </div>
+    </div>
+
+    
+
+    
+    <!-- Report (view toggle) -->
+    <div id="reportContent" class="hidden bg-white border rounded-2xl shadow-sm p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="reportTitle" class="text-sm font-semibold">법인 활용률 보고서 요약</h2>
+          <p class="text-xs text-slate-500 mt-1">업로드된 Utilization Status Report 기반 자동 생성</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="downloadReportImgBtn" class="text-xs rounded-xl border px-3 py-2 hover:bg-slate-50 bg-white">이미지 다운로드</button>
+          <button id="copyReportBtn" class="text-xs rounded-xl border px-3 py-2 hover:bg-slate-50">
+            리포트 복사
+          </button>
+        </div>
+      </div>
+      <div class="mt-3 rounded-2xl border bg-slate-50 p-4">
+        <pre id="reportText" class="whitespace-pre-wrap break-words text-[15px] leading-7 text-slate-900"></pre>
+      </div>
+
+      <!-- Utilization Status Report table (B17~N20) -->
+      <div class="mt-4 bg-white border rounded-2xl shadow-sm p-4" id="reportUtilTableCard">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <h3 class="text-sm font-semibold">Utilization Status Report 테이블</h3>
+          <span class="text-xs text-slate-500">B17~N20</span>
+        </div>
+        <div class="overflow-auto rounded-xl border bg-white">
+          <table class="min-w-full text-xs" id="reportUtilTable"></table>
+        </div>
+      </div>
+
+      <!-- Warning lists -->
+      <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-white border rounded-2xl shadow-sm p-4">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h3 class="text-sm font-semibold">Warning List (누적)</h3>
+            <span class="text-xs text-slate-500">10% 미만</span>
+          </div>
+          <div id="reportWarningCumList" class="text-sm text-slate-700 space-y-1"></div>
+        </div>
+
+        <div class="bg-white border rounded-2xl shadow-sm p-4">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h3 class="text-sm font-semibold">Warning List (월간)</h3>
+            <span class="text-xs text-slate-500">10% 미만</span>
+          </div>
+          <div id="reportWarningMonList" class="text-sm text-slate-700 space-y-1"></div>
+        </div>
+      </div>
+
+      <!-- Report charts -->
+      <div class="mt-4 space-y-4" id="reportChartsWrap">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="bg-white border rounded-2xl shadow-sm p-4">
+            <h3 class="text-sm font-semibold mb-2">누적 활용률 그래프</h3>
+            <p class="text-[11px] text-slate-500 mb-2">국가별 Total(누적) 기준</p>
+            <canvas id="reportCumUtilChart" height="140"></canvas>
+          </div>
+          <div class="bg-white border rounded-2xl shadow-sm p-4">
+            <h3 class="text-sm font-semibold mb-2">월간 활용률 그래프</h3>
+            <p class="text-[11px] text-slate-500 mb-2">국가별 Total(월간) 기준</p>
+            <canvas id="reportMonUtilChart" height="140"></canvas>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="bg-white border rounded-2xl shadow-sm p-4">
+            <h3 class="text-sm font-semibold mb-2">HQ 컨텐츠 Pillar 별 활용률 (누적)</h3>
+            <p class="text-[11px] text-slate-500 mb-2">시트 계산값(AC46~AG46) 우선</p>
+            <canvas id="reportPillarCumChart" height="200"></canvas>
+          </div>
+
+          <div class="bg-white border rounded-2xl shadow-sm p-4">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <div>
+                <h3 class="text-sm font-semibold">컨텐츠 활용률 Top3</h3>
+                <p class="text-[11px] text-slate-500 mt-1">Ref1 AO88~AO90 / AP88~AP90 기준 · 클릭 시 URL 오픈</p>
+              </div>
+              <span class="text-xs text-slate-500">Monthly data</span>
+            </div>
+            <canvas id="reportContentTop3Chart" height="120"></canvas>
+            <p id="reportContentTop3Empty" class="hidden text-xs text-slate-500 mt-2">Top3 컨텐츠 데이터가 없어 그래프를 표시하지 못했습니다.</p>
+          </div>
+        </div>
+      </div>
+
+          
+<!-- 추가 그래프: Ref2 기반 (리포트 토글 전용) -->
+<div class="mt-4 space-y-4">
+
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+    <div class="bg-white border rounded-2xl shadow-sm p-4">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <div>
+          <h3 class="text-sm font-semibold">로컬 컨텐츠 필라별 구성</h3>
+          <p class="text-[11px] text-slate-500 mt-1">
+            Ref2.Local contents Data · Local produced content by pillar (월 매칭)
+          </p>
+        </div>
+        <span id="reportRef2PillarMonthTag" class="text-xs text-slate-500">-</span>
+      </div>
+      <canvas id="reportRef2PillarChart" height="160"></canvas>
+      <p id="reportRef2PillarEmpty" class="hidden text-xs text-slate-500 mt-2">
+        Ref2 필라별 구성 데이터가 없어 그래프를 표시하지 못했습니다.
+      </p>
+    </div>
+
+    <div class="bg-white border rounded-2xl shadow-sm p-4">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <div>
+          <h3 class="text-sm font-semibold">주요국가 HQ vs Local 비율 (100%)</h3>
+          <p class="text-[11px] text-slate-500 mt-1">
+            Ref2.Local contents Data · HQ% vs Local% (100% 기준)
+          </p>
+        </div>
+        <span id="reportRef2RatioMonthTag" class="text-xs text-slate-500">-</span>
+      </div>
+      <canvas id="reportRef2RatioChart" height="260"></canvas>
+      <p id="reportRef2RatioEmpty" class="hidden text-xs text-slate-500 mt-2">
+        Ref2 비율 데이터가 없어 그래프를 표시하지 못했습니다.
+      </p>
+    </div>
+
+  </div>
+
+  <div class="bg-white border rounded-2xl shadow-sm p-4">
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <div>
+        <h3 class="text-sm font-semibold">로컬 컨텐츠 발행 개수 (HQ vs Local)</h3>
+        <p class="text-[11px] text-slate-500 mt-1">
+          Ref2.Local contents Data · Utilized vs Local produced (월 매칭)
+        </p>
+      </div>
+      <span id="reportRef2HqLocalMonthTag" class="text-xs text-slate-500">-</span>
+    </div>
+    <canvas id="reportRef2HqLocalStackChart" height="160"></canvas>
+    <p id="reportRef2HqLocalEmpty" class="hidden text-xs text-slate-500 mt-2">
+      Ref2 HQ/Local 데이터가 없어 그래프를 표시하지 못했습니다.
+    </p>
+  </div>
+
+</div>
+
+
+
+</div>
+
+    <div id="dashContent" class="space-y-4">
+<!-- Summary -->
+    <div class="bg-white border rounded-2xl shadow-sm p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold">Summary</h2>
+          <p class="text-xs text-slate-500 mt-1">
+            Overall · Country · Pillar · (월간) Contents(Top3) 자동 생성
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="toggleSummaryBtn" class="text-xs rounded-xl border px-3 py-2 hover:bg-slate-50 bg-white">요약 펼치기</button>
+          <button id="copySummaryBtn" class="text-xs rounded-xl border px-3 py-2 hover:bg-slate-50">
+            요약 복사
+          </button>
+        </div>
+      </div>
+
+      <!-- ✅ one-line headline (always visible) -->
+      <div class="mt-2 text-[11px] text-slate-600 leading-snug" id="summaryOneLine"></div>
+
+      <!-- ✅ body (default collapsed) -->
+      <div id="summaryBody" class="mt-3 grid grid-cols-1 xl:grid-cols-3 gap-3 hidden">
+        <!-- Left: pretty view -->
+        <div class="xl:col-span-2 rounded-2xl border bg-slate-50 p-4">
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-medium text-slate-600">보기용(가독성)</div>
+            <span id="summaryModeBadge" class="text-[11px] font-medium bg-white border text-slate-700 px-2.5 py-1 rounded-full"></span>
+          </div>
+
+          <div id="summaryPretty" class="mt-3 space-y-4"></div>
+
+          <!-- Warning list box -->
+          <div id="warningBox" class="mt-4 hidden rounded-2xl border border-red-200 bg-red-50 p-4">
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-sm font-semibold text-red-700">⚠️ Warning list (10% 미만)</div>
+              <span id="warningModeBadge" class="text-[11px] font-medium bg-white border border-red-200 text-red-700 px-2.5 py-1 rounded-full"></span>
+            </div>
+            <p class="text-xs text-red-600 mt-1">
+              현재 모드의 <b>Total 활용률</b> 기준으로 10% 미만 국가를 표시합니다.
+            </p>
+            <div id="warningList" class="mt-3 flex flex-wrap gap-2"></div>
+            <div class="mt-3 text-xs text-red-700/80" id="warningNote"></div>
+          </div>
+        </div>
+
+        <!-- Right: copy text + metrics -->
+        <div class="rounded-2xl border bg-white p-4">
+          <div class="text-xs font-medium text-slate-600 mb-2">복사용 텍스트</div>
+          <pre id="summaryText" class="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-900"></pre>
+
+          <div class="mt-4 text-xs font-medium text-slate-600 mb-2">요약에 사용된 수치</div>
+          <div id="summaryMetrics" class="text-sm text-slate-700 leading-relaxed"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts row 1 -->
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div class="xl:col-span-2 bg-white border rounded-2xl shadow-sm p-4">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <h3 class="text-sm font-semibold" id="countryChartTitle">국가별 Total 활용률 (누적)</h3>
+            <p class="text-[11px] text-slate-500 mt-1">
+              30% 기준선(블랙) · 10% 기준선(레드) · 10% 미만 국가는 경고색
+            </p>
+          </div>
+          <span class="text-xs text-slate-500" id="chartHint">전체</span>
+        </div>
+        <canvas id="countryChart" height="120"></canvas>
+      </div>
+
+      <div class="bg-white border rounded-2xl shadow-sm p-4">
+        <h3 class="text-sm font-semibold mb-2" id="tierTitle">활용률 Group 분포 (누적 Group)</h3>
+        <p class="text-[11px] text-slate-500 mb-2" id="tierHint">
+          마우스 오버 시 포함 국가 + 비중(%) 표시
+        </p>
+        <canvas id="tierChart" height="230"></canvas>
+      </div>
+    </div>
+
+    <!-- ✅ Contents Top3 chart (월간에서만 보임) -->
+    <div id="contentsSection" class="bg-white border rounded-2xl shadow-sm p-4 hidden">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <div>
+          <h3 class="text-sm font-semibold">컨텐츠 활용률 Top3</h3>
+          <p class="text-[11px] text-slate-500 mt-1">
+            (월간 모드 전용) Ref1 AO88~AO90 / AP88~AP90 · Ref4(C열 매칭 / J URL) · 바 위 % 라벨 · 바 클릭 → URL 새탭
+          </p>
+        </div>
+        <div class="text-xs text-slate-500">Monthly only</div>
+      </div>
+      <canvas id="contentTop3Chart" height="80"></canvas>
+    </div>
+
+    <!-- Charts row 2 -->
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div class="bg-white border rounded-2xl shadow-sm p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold" id="pillarTitle">Pillar 평균 활용률 (누적)</h3>
+          <span class="text-xs text-slate-500">※ Pillar에는 10% 기준선 미적용</span>
+        </div>
+        <canvas id="pillarChart" height="260"></canvas>
+      </div>
+
+      <div class="xl:col-span-2 bg-white border rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b flex items-center justify-between">
+          <h3 class="text-sm font-semibold">상세 데이터</h3>
+          <p class="text-xs text-slate-500">Group(누적)=E · Group(월간)=AO · 누적=AC~AH · 월간=AI~AN</p>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-slate-600">
+              <tr>
+                <th class="text-left px-4 py-3 font-medium">Country</th>
+                <th class="text-left px-4 py-3 font-medium">Group(누적)</th>
+                <th class="text-left px-4 py-3 font-medium">Group(월간)</th>
+                <th class="text-right px-4 py-3 font-medium">Total(누적)</th>
+                <th class="text-right px-4 py-3 font-medium">Total(월간)</th>
+                <th class="text-right px-4 py-3 font-medium">Brand</th>
+                <th class="text-right px-4 py-3 font-medium">Product</th>
+                <th class="text-right px-4 py-3 font-medium">Motorsports</th>
+                <th class="text-right px-4 py-3 font-medium">Formula E</th>
+                <th class="text-right px-4 py-3 font-medium">Info/Entertain</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody" class="divide-y"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <details class="bg-white border rounded-2xl shadow-sm p-4 text-xs text-slate-600">
+      <summary class="cursor-pointer select-none font-medium">디버그</summary>
+      <pre id="debugBox" class="mt-3 whitespace-pre-wrap break-words"></pre>
+    </details>
+    </div>
+
+  </section>
+</main>
+
+<div id="toastRoot" class="fixed bottom-4 right-4 space-y-2 z-[9999]"></div>
+
+<script>
+/* =======================
+   Brand Colors
+======================= */
+const HK = {
+  orange: "#ec6608",
+  black: "#000000",
+  gray: "#9a9b9c",
+  lightGray: "#e5e7eb",
+  white: "#ffffff",
+  warning: "#d32f2f"
+};
+
+/* =======================
+   Chart.js plugins
+======================= */
+const multiThresholdPlugin = {
+  id: "multiThresholdPlugin",
+  afterDatasetsDraw(chart, args, pluginOptions) {
+    const lines = Array.isArray(pluginOptions?.lines) ? pluginOptions.lines : [];
+    if (!lines.length) return;
+    const yScale = chart.scales?.y;
+    if (!yScale) return;
+    const { ctx, chartArea } = chart;
+    if (!chartArea) return;
+
+    ctx.save();
+    for (const line of lines) {
+      const yValue = line?.yValue;
+      if (typeof yValue !== "number") continue;
+
+      const y = yScale.getPixelForValue(yValue);
+      const color = line?.color || HK.black;
+      const dash = Array.isArray(line?.dash) ? line.dash : [6,6];
+      const width = line?.width ?? 2;
+      const label = line?.label ?? `${yValue}%`;
+
+      ctx.strokeStyle = color;
+      ctx.setLineDash(dash);
+      ctx.lineWidth = width;
+
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, y);
+      ctx.lineTo(chartArea.right, y);
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(0,0,0,0.75)";
+      ctx.font = "12px sans-serif";
+
+      const padX = 8;
+      const tw = ctx.measureText(label).width;
+      const bx = chartArea.right - tw - padX*2 - 6;
+      const by = y - 18;
+      const safeBy = Math.max(chartArea.top + 4, Math.min(by, chartArea.bottom - 22));
+
+      ctx.beginPath();
+      roundRect(ctx, bx, safeBy, tw + padX*2, 20, 10);
+      ctx.fill();
+
+      ctx.fillStyle = HK.white;
+      ctx.fillText(label, bx + padX, safeBy + 14);
+    }
+    ctx.restore();
+  }
+};
+
+const barValueLabelPlugin = {
+  id: "barValueLabelPlugin",
+  afterDatasetsDraw(chart, args, opts) {
+    // ✅ 특정 차트에서는 % 라벨 표시 제거
+    if (chart?.canvas?.id === "reportRef2HqLocalStackChart") return;
+    const meta = chart.getDatasetMeta(0);
+    const data = chart.data.datasets?.[0]?.data || [];
+    const ctx = chart.ctx;
+
+    ctx.save();
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+
+    meta.data.forEach((bar, i) => {
+      const v = Number(data[i] ?? 0);
+      const label = `${v.toFixed(1)}%`;
+      const x = bar.x;
+      const y = bar.y - 6;
+
+      const padX = 6;
+      const tw = ctx.measureText(label).width;
+      const w = tw + padX*2;
+      const h = 18;
+      const bx = x - w/2;
+      const by = y - h;
+
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.strokeStyle = "rgba(0,0,0,0.12)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      roundRect(ctx, bx, by, w, h, 9);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = opts?.color || "rgba(0,0,0,0.85)";
+      ctx.fillText(label, x, y - 3);
+    });
+
+    ctx.restore();
+  }
+};
+
+function roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w/2, h/2);
+  ctx.moveTo(x+rr, y);
+  ctx.arcTo(x+w, y, x+w, y+h, rr);
+  ctx.arcTo(x+w, y+h, x, y+h, rr);
+  ctx.arcTo(x, y+h, x, y, rr);
+  ctx.arcTo(x, y, x+w, y, rr);
+  ctx.closePath();
+}
+
+Chart.register(multiThresholdPlugin);
+Chart.register(barValueLabelPlugin);
+
+// ✅ Count labels on stacked bars (Report Ref2 HQ vs Local counts)
+const countStackLabelPlugin = {
+  id: "countStackLabelPlugin",
+  afterDatasetsDraw(chart, args, opts) {
+    if (!chart?.canvas || chart.canvas.id !== "reportRef2HqLocalStackChart") return;
+    if (chart.config?.type !== "bar") return;
+
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const datasets = chart.data.datasets || [];
+    datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (!meta || meta.hidden) return;
+      meta.data.forEach((bar, i) => {
+        const v = Number(ds.data?.[i] ?? 0);
+        if (!Number.isFinite(v) || v === 0) return;
+
+        // For vertical stacked bars: y is top of segment, base is bottom
+        const x = bar.x;
+        const y = (bar.y + bar.base) / 2;
+
+        const label = `${Math.round(v)}`;
+        const padX = 5;
+        const tw = ctx.measureText(label).width;
+        const w = tw + padX * 2;
+        const h = 16;
+        const bx = x - w / 2;
+        const by = y - h / 2;
+
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.strokeStyle = "rgba(0,0,0,0.12)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        roundRect(ctx, bx, by, w, h, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(0,0,0,0.85)";
+        ctx.fillText(label, x, y + 0.5);
+      });
+    });
+
+    ctx.restore();
+  }
+};
+Chart.register(countStackLabelPlugin);
+
+
+// ✅ Count labels on bars (Report Ref2 Pillar chart only)
+const pillarCountLabelPlugin = {
+  id: "pillarCountLabelPlugin",
+  afterDatasetsDraw(chart, args, opts) {
+    if (!chart?.canvas || chart.canvas.id !== "reportRef2PillarChart") return;
+    if (chart.config?.type !== "bar") return;
+
+    const ctx = chart.ctx;
+    const ds = chart.data.datasets?.[0];
+    const data = ds?.data || [];
+    const meta = chart.getDatasetMeta(0);
+    if (!meta || meta.hidden) return;
+
+    ctx.save();
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+
+    meta.data.forEach((bar, i) => {
+      const v = Number(data[i] ?? 0);
+      if (!Number.isFinite(v) || v === 0) return;
+
+      const label = `${Math.round(v)}`;
+      const x = bar.x;
+      const y = bar.y - 6;
+
+      const padX = 6;
+      const tw = ctx.measureText(label).width;
+      const w = tw + padX * 2;
+      const h = 18;
+      const bx = x - w / 2;
+      const by = y - h;
+
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.strokeStyle = "rgba(0,0,0,0.12)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      roundRect(ctx, bx, by, w, h, 9);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillText(label, x, y - 3);
+    });
+
+    ctx.restore();
+  }
+};
+Chart.register(pillarCountLabelPlugin);
+
+
+// ✅ Robust fix: 어떤 플러그인이든 도넛 중앙에 라벨/텍스트를 그리면, 'hole' 영역을 다시 흰색으로 덮어서 제거
+const doughnutCenterClearPlugin = {
+  id: "doughnutCenterClearPlugin",
+  afterDatasetsDraw(chart, args, opts) {
+    // tierChart에서만 적용
+    if (!chart || !chart.canvas || chart.canvas.id !== "tierChart") return;
+    if (chart.config?.type !== "doughnut") return;
+
+    const meta = chart.getDatasetMeta(0);
+    const arc = meta?.data?.[0];
+    if (!arc) return;
+
+    const ctx = chart.ctx;
+    const x = arc.x;
+    const y = arc.y;
+    const innerR = arc.innerRadius;
+    if (!Number.isFinite(innerR) || innerR <= 0) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.fillStyle = (opts && opts.color) ? opts.color : "#ffffff";
+    ctx.arc(x, y, innerR + 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+Chart.register(doughnutCenterClearPlugin);
+
+// ✅ Safeguard: ChartDataLabels가 포함되어 있으면 중앙/내부 라벨을 끔 (플러그인 없으면 아무 영향 없음)
+try {
+  if (window.Chart && Chart.defaults && Chart.defaults.plugins) {
+    Chart.defaults.plugins.datalabels = Chart.defaults.plugins.datalabels || {};
+    Chart.defaults.plugins.datalabels.display = false;
+  }
+} catch (e) {}
+
+/* =======================
+   Targets
+======================= */
+const TARGET_COUNTRIES = [
+  "Germany","UK","Hungary","China","USA","Mexico","Colombia","Sao Paulo, Brasil",
+  "Peru","Argentina","Indonesia","Australia","Malaysia","Thailand","Vietnam","Taiwan","Jeddah"
+];
+
+/* =======================
+   Helpers
+======================= */
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
+function safeUrl(url) {
+  const u = String(url ?? "").trim();
+  if (!u) return "";
+  if (/^\s*javascript:/i.test(u)) return "";
+  return u;
+}
+function toast({ title, description, variant = "default" }) {
+  const root = document.getElementById("toastRoot");
+  const el = document.createElement("div");
+  const isBad = variant === "destructive";
+  el.className =
+    "toast-enter bg-white border shadow-lg rounded-2xl p-4 w-[380px] " +
+    (isBad ? "border-red-200" : "border-slate-200");
+
+  el.innerHTML = `
+    <div class="flex items-start gap-3">
+      <div class="mt-1 w-2.5 h-2.5 rounded-full ${isBad ? "bg-red-500" : "bg-emerald-500"}"></div>
+      <div class="flex-1">
+        <div class="text-sm font-semibold">${escapeHtml(title || "")}</div>
+        <div class="text-xs text-slate-500 mt-1 leading-relaxed">${escapeHtml(description || "")}</div>
+      </div>
+      <button class="text-slate-400 hover:text-slate-600 text-sm leading-none">✕</button>
+    </div>
+  `;
+  el.querySelector("button").addEventListener("click", () => removeToast(el));
+  root.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("toast-enter-active"));
+  setTimeout(() => removeToast(el), 3600);
+}
+function removeToast(el) {
+  if (!el || !el.parentNode) return;
+  el.classList.add("toast-exit-active");
+  setTimeout(() => el.remove(), 180);
+}
+function setLoading(isLoading) {
+  document.getElementById("loadingText").textContent = isLoading ? "분석 중..." : "";
+}
+function guessMonth(fileName, sheetName) {
+  const raw = `${fileName} ${sheetName}`;
+  const text = raw.toLowerCase();
+
+  // 숫자 기반 (YYYY-MM / YYYYMM)
+  const m1 = raw.match(/(20\d{2})[.\-\/]?\s*(0?[1-9]|1[0-2])\b/);
+  if (m1) return `${m1[1]}-${String(m1[2]).padStart(2,"0")}`;
+  const m2 = raw.match(/(20\d{2})(0[1-9]|1[0-2])\b/);
+  if (m2) return `${m2[1]}-${m2[2]}`;
+
+  // 영문 월명 기반 (Jan/January ...)
+  const map = {
+    jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4,
+    may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8,
+    sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11,
+    dec: 12, december: 12
+  };
+  const hit = text.match(/\b(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)\b/);
+  if (hit) return `????-${String(map[hit[1]]).padStart(2,"0")}`;
+
+  return "Unknown";
+}
+function norm(s) { return String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim(); }
+function isCountryMatch(cellText, target) {
+  const a = norm(cellText);
+  const b = norm(target);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.includes(b) || b.includes(a)) return true;
+  if (b.includes("sao paulo") && a.includes("sao paulo")) return true;
+  return false;
+}
+
+// ✅ 국가 행 후보 중 "실데이터 행" 우선 선택: Total(누적/월간) 컬럼이 숫자/퍼센트로 존재하는 행만 인정
+function rowScore(ws, r, getter) {
+  const get = (typeof getter === "function") ? getter : (() => null);
+  const vCumTotal = get(ws, r, "AH");
+  const vMonTotal = get(ws, r, "AN");
+  const vGroup = get(ws, r, "E");
+
+  const isPctLike = (v) => {
+    if (v === null || v === undefined || v === "") return false;
+    if (typeof v === "number") return Number.isFinite(v);
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (!s) return false;
+      const low = s.toLowerCase();
+      if (low.includes("n/a") || low.includes("#n/a")) return false;
+      return !Number.isNaN(Number(s.replace("%","")));
+    }
+    return false;
+  };
+
+  let score = 0;
+  if (isPctLike(vCumTotal)) score += 2;
+  if (isPctLike(vMonTotal)) score += 2;
+  const t = String(vGroup ?? "").trim();
+  if (t.length === 1) score += 1;
+  return score;
+}
+
+
+function clampPct(n) { return Math.max(0, Math.min(100, n)); }
+function toPct(v) {
+  if (v === null || v === undefined || v === "") return 0;
+  if (typeof v === "string") {
+    const s = v.trim().replace("%", "");
+    const n = Number(s);
+    if (!Number.isFinite(n)) return 0;
+    return clampPct(n > 1 ? n : n * 100);
+  }
+  if (typeof v === "number") return clampPct(v > 1 ? v : v * 100);
+  return 0;
+}
+function fmtInt(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "0";
+  return Math.round(x).toLocaleString();
+}
+function fmtPct(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "0.0%";
+  return `${x.toFixed(1)}%`;
+}
+function badge(text) {
+  return `<span class="inline-flex items-center rounded-full bg-white border px-2.5 py-1 text-[11px] font-medium text-slate-700">${escapeHtml(text)}</span>`;
+}
+function warningChip(country, pct) {
+  const p = Number(pct ?? 0);
+  return `
+    <span class="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-700">
+      ${escapeHtml(country)}
+      <span class="text-[11px] font-semibold bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">${p.toFixed(1)}%</span>
+    </span>
+  `;
+}
+function shortenLabel(s, max=26) {
+  const t = String(s ?? "").trim();
+  if (t.length <= max) return t;
+  return t.slice(0, max-1) + "…";
+}
+
+/* =======================
+   Parser (URL ONLY)
+======================= */
+async function parseUtilizationExcel(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+
+  // Ref1
+  const REF1_NAME = "Ref1.Utilization Status-Detail";
+  const ref1Name = wb.SheetNames.includes(REF1_NAME) ? REF1_NAME : wb.SheetNames[0];
+  const ws1 = wb.Sheets[ref1Name];
+
+  const ref = ws1["!ref"];
+  if (!ref) throw new Error("Ref1 시트 범위를 찾을 수 없습니다 (!ref 없음).");
+  const range = XLSX.utils.decode_range(ref);
+
+  const col = (letter) => XLSX.utils.decode_col(letter);
+
+  const getCellObj = (ws, r, cLetter) => {
+    const addr = XLSX.utils.encode_cell({ r, c: col(cLetter) });
+    return ws[addr] || null;
+  };
+
+  const getCellValue = (ws, r, cLetter) => {
+    const cell = getCellObj(ws, r, cLetter);
+    return cell ? cell.v : null;
+  };
+
+  // 하이퍼링크 Target 우선
+  const getCellLinkOrValue = (ws, r, cLetter) => {
+    const cell = getCellObj(ws, r, cLetter);
+    if (!cell) return null;
+    if (cell.l && (cell.l.Target || cell.l.target)) return cell.l.Target || cell.l.target;
+    return cell.v ?? null;
+  };
+
+
+
+  // ✅ 평균 계산용: N/A/빈값은 제외하고 퍼센트만 숫자로 변환 (0으로 치환하지 않음)
+  const pctOrNull = (v) => {
+    if (v === null || v === undefined || v === "") return null;
+    if (typeof v === "string") {
+      const s0 = v.trim();
+      if (!s0) return null;
+      const sLower = s0.toLowerCase();
+      if (sLower === "n/a" || sLower === "na" || sLower === "#n/a" || sLower.includes("#n/a")) return null;
+      const s = s0.replace("%", "");
+      const n = Number(s);
+      if (!Number.isFinite(n)) return null;
+      return clampPct(n > 1 ? n : n * 100);
+    }
+    if (typeof v === "number") {
+      if (!Number.isFinite(v)) return null;
+      return clampPct(v > 1 ? v : v * 100);
+    }
+    return null;
+  };
+
+  // ✅ Pillar 평균(37개국 기준) 계산: D열에 국가명이 있는 모든 행을 대상으로 AC~AG(누적), AI~AM(월간)
+  const pillarCols = {
+    CUM: { brand: "AC", product: "AD", motorsports: "AE", formulae: "AF", info: "AG" },
+    MON: { brand: "AI", product: "AJ", motorsports: "AK", formulae: "AL", info: "AM" }
+  };
+  const pillarAgg = {
+    CUM: { brand:{sum:0,cnt:0}, product:{sum:0,cnt:0}, motorsports:{sum:0,cnt:0}, formulae:{sum:0,cnt:0}, info:{sum:0,cnt:0} },
+    MON: { brand:{sum:0,cnt:0}, product:{sum:0,cnt:0}, motorsports:{sum:0,cnt:0}, formulae:{sum:0,cnt:0}, info:{sum:0,cnt:0} }
+  };
+
+  const looksLikeHeader = (d) => {
+    const s = String(d ?? "").trim().toLowerCase();
+    if (!s) return true;
+    return (s === "country" || s.includes("country") || s.includes("tier") || s.includes("total") || s.includes("summary"));
+  };
+
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const d = getCellValue(ws1, r, "D");
+    if (!d || looksLikeHeader(d)) continue;
+
+    for (const mode of ["CUM","MON"]) {
+      const cols = pillarCols[mode];
+      for (const k of Object.keys(cols)) {
+        const v = pctOrNull(getCellValue(ws1, r, cols[k]));
+        if (v === null) continue; // N/A/빈값 제외
+        pillarAgg[mode][k].sum += v;
+        pillarAgg[mode][k].cnt += 1;
+      }
+    }
+  }
+
+  const pillarAvg37 = { CUM: {}, MON: {} };
+  for (const mode of ["CUM","MON"]) {
+    for (const k of Object.keys(pillarAgg[mode])) {
+      const a = pillarAgg[mode][k];
+      pillarAvg37[mode][k] = { avg: a.cnt ? (a.sum / a.cnt) : 0, cnt: a.cnt };
+    }
+  }
+
+  // --- find 17 countries row mapping (robust: D열 정확 매칭 + AH/AN 퍼센트 존재 행만)
+  const hitRow = new Map();
+
+  const isPctLikeCell = (v) => {
+    if (v === null || v === undefined || v === "") return false;
+    if (typeof v === "number") return Number.isFinite(v);
+    if (typeof v === "string") {
+      const s0 = v.trim();
+      if (!s0) return false;
+      const sl = s0.toLowerCase();
+      if (sl === "n/a" || sl === "na" || sl.includes("#n/a")) return false;
+      const n = Number(s0.replace("%",""));
+      return Number.isFinite(n);
+    }
+    return false;
+  };
+
+  const findDataRowByCountry = (target) => {
+    const t = norm(target);
+    if (!t) return null;
+
+    // ✅ D열이 국가명이고, Total 활용률(AH/AN)이 퍼센트/숫자인 행만 사용
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      const d = getCellValue(ws1, r, "D");
+      if (!d) continue;
+      if (norm(d) !== t) continue;
+
+      const vCum = getCellValue(ws1, r, "AH");
+      const vMon = getCellValue(ws1, r, "AN");
+      if (isPctLikeCell(vCum) || isPctLikeCell(vMon)) return r;
+    }
+    return null;
+  };
+
+  for (const tc of TARGET_COUNTRIES) {
+    const r = findDataRowByCountry(tc);
+    if (r !== null && r !== undefined) hitRow.set(tc, r);
+  }
+
+  const countries = [];
+
+  const missing = [];
+
+  for (const tc of TARGET_COUNTRIES) {
+    const r = hitRow.get(tc);
+    if (r === undefined) { missing.push(tc); continue; }
+
+    const tierCum = String(getCellValue(ws1, r, "E") ?? "N/A").trim();
+    const tierMon = String(getCellValue(ws1, r, "AO") ?? "N/A").trim();
+
+    const cum = {
+      brand:       toPct(getCellValue(ws1, r, "AC")),
+      product:     toPct(getCellValue(ws1, r, "AD")),
+      motorsports: toPct(getCellValue(ws1, r, "AE")),
+      formulae:    toPct(getCellValue(ws1, r, "AF")),
+      info:        toPct(getCellValue(ws1, r, "AG")),
+      total:       toPct(getCellValue(ws1, r, "AH")),
+    };
+
+    const mon = {
+      brand:       toPct(getCellValue(ws1, r, "AI")),
+      product:     toPct(getCellValue(ws1, r, "AJ")),
+      motorsports: toPct(getCellValue(ws1, r, "AK")),
+      formulae:    toPct(getCellValue(ws1, r, "AL")),
+      info:        toPct(getCellValue(ws1, r, "AM")),
+      total:       toPct(getCellValue(ws1, r, "AN")),
+    };
+
+    countries.push({ country: tc, tierCum, tierMon, cum, mon, _rowIndex0: r, _rowIndex1: r+1 });
+  }
+
+  // Summary cells (0-based row index in SheetJS)
+  const summaryCells = {
+    ghqCumContents: getCellValue(ws1, 44, "AB"), // AB45
+    ghqMonContents: getCellValue(ws1, 1,  "AJ"), // AJ2
+    cumUsed:        getCellValue(ws1, 45, "K"),  // K46
+    cumAvail:       getCellValue(ws1, 45, "AB"), // AB46
+    monUsed:        getCellValue(ws1, 45, "Q"),  // Q46
+    monAvail:       getCellValue(ws1, 2,  "AJ")  // AJ3
+  };
+
+  // ✅ Pillar 평균값 (시트에 이미 계산된 값 사용)
+  // - 누적: AC46~AG46
+  // - 월간: AI46~AM46
+  const pillarAvgRow46 = {
+    CUM: {
+      brand:       pctOrNull(getCellValue(ws1, 45, "AC")),
+      product:     pctOrNull(getCellValue(ws1, 45, "AD")),
+      motorsports: pctOrNull(getCellValue(ws1, 45, "AE")),
+      formulae:    pctOrNull(getCellValue(ws1, 45, "AF")),
+      info:        pctOrNull(getCellValue(ws1, 45, "AG"))
+    },
+    MON: {
+      brand:       pctOrNull(getCellValue(ws1, 45, "AI")),
+      product:     pctOrNull(getCellValue(ws1, 45, "AJ")),
+      motorsports: pctOrNull(getCellValue(ws1, 45, "AK")),
+      formulae:    pctOrNull(getCellValue(ws1, 45, "AL")),
+      info:        pctOrNull(getCellValue(ws1, 45, "AM"))
+    }
+  };
+
+
+  
+  /* =======================
+     Ref2: 기간(날짜 테이블) 매칭
+     - Ref2.Local contents Data!AN5:AP18 에서 월별 Start/End Date를 읽어옴
+     - Ref1.Utilization Status-Detail!M3 값(1~12 또는 '1월')을 기준으로 기간을 매칭
+  ======================= */
+  const excelDateToYMD = (v) => {
+    if (v === null || v === undefined || v === "") return "";
+    // 이미 문자열 날짜인 경우(예: 2026-01-21)
+    if (typeof v === "string") {
+      const s = v.trim();
+      // 'YYYY-MM-DD' 형태면 그대로
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      // 'YYYY.MM.DD' 형태 대응
+      const m = s.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})$/);
+      if (m) return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
+      return s;
+    }
+    // Excel serial date number
+    if (typeof v === "number" && Number.isFinite(v)) {
+      try {
+        const d = XLSX.SSF.parse_date_code(v);
+        if (d && d.y && d.m && d.d) {
+          return `${String(d.y).padStart(4,"0")}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`;
+        }
+      } catch (e) {}
+    }
+    return String(v);
+  };
+
+  const monthCellM3 = getCellValue(ws1, 2, "M"); // M3 (0-based row index = 2)
+  const monthNumFromM3 = (() => {
+    if (monthCellM3 === null || monthCellM3 === undefined || monthCellM3 === "") return null;
+    if (typeof monthCellM3 === "number" && Number.isFinite(monthCellM3)) {
+      const n = Math.round(monthCellM3);
+      return (n >= 1 && n <= 12) ? n : null;
+    }
+    const s = String(monthCellM3).trim();
+    const hit = s.match(/(1[0-2]|[1-9])/);
+    if (!hit) return null;
+    const n = Number(hit[1]);
+    return (n >= 1 && n <= 12) ? n : null;
+  })();
+
+  const period = { label: null, start: "", end: "", source: null };
+
+  if (monthNumFromM3) {
+    period.label = `${monthNumFromM3}월`;
+  }
+
+  const REF2_NAME = "Ref2.Local contents Data";
+  const ref2Name = wb.SheetNames.includes(REF2_NAME) ? REF2_NAME : null;
+  const ws2 = ref2Name ? wb.Sheets[ref2Name] : null;
+
+  if (ws2 && period.label) {
+    const r2ref = ws2["!ref"];
+    if (r2ref) {
+      const r2range = XLSX.utils.decode_range(r2ref);
+
+      // AN(월) / AO(Start) / AP(End) 스캔
+      for (let r = r2range.s.r; r <= r2range.e.r; r++) {
+        const mValRaw = getCellValue(ws2, r, "AN");
+        const mVal = String(mValRaw ?? "").trim();
+        if (!mVal) continue;
+
+        // '1월', '01월', '1' 등 유사 케이스 대응
+        const hitMonth = (() => {
+          const n = monthNumFromM3;
+          if (!n) return false;
+          if (mVal === `${n}월` || mVal === `${String(n).padStart(2,"0")}월`) return true;
+          if (mVal === String(n)) return true;
+          // '1월 데이터' 같은 케이스
+          if (mVal.includes(`${n}월`)) return true;
+          return false;
+        })();
+
+        if (!hitMonth) continue;
+
+        const sVal = getCellValue(ws2, r, "AO");
+        const eVal = getCellValue(ws2, r, "AP");
+
+        period.start = excelDateToYMD(sVal);
+        period.end = excelDateToYMD(eVal);
+        period.source = `${ref2Name}!AN${r+1}:AP${r+1}`;
+        break;
+      }
+    }
+  }
+
+
+
+  /* =======================
+     Ref2: 그래프용 데이터 추출 (리포트 토글 전용)
+     1) Local produced content by pillar (월 매칭, Total 행)
+     2) Utilized vs Local produced content (월 매칭, 주요국가 Local/HQ)
+  ======================= */
+  const monthNumToEn = (n) => ([
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December"
+  ][(n||1)-1] || "January");
+  const monthEn = monthNumFromM3 ? monthNumToEn(monthNumFromM3) : null;
+
+  const ref2LocalPillarTotal = { monthEn, brand: null, product: null, motorsports: null, formulae: null, info: null, total: null };
+  const ref2HqLocalCounts = []; // key 17 countries [{country, local, hq, subtotal}]
+  const ref2HqLocalCountsAll = []; // all countries (B5~B41)
+  const KEY_COUNTRIES = [
+    "Germany","UK","Hungary","China","USA","Mexico","Colombia","Sao Paulo, Brasil","Peru","Argentina",
+    "Indonesia","Australia","Malaysia","Thailand","Vietnam","Taiwan","Jeddah"
+  ];
+
+  const numFromCell = (cell) => {
+    if (!cell) return 0;
+    const v = (cell.v ?? cell.w ?? "");
+    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+    const s = String(v).trim().replace(/,/g,"");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const getCellObjRC = (ws, r, c) => {
+    const addr = XLSX.utils.encode_cell({ r, c });
+    return ws[addr] || null;
+  };
+
+  if (ws2 && monthEn) {
+    const r2ref = ws2["!ref"];
+    if (r2ref) {
+      const r2range = XLSX.utils.decode_range(r2ref);
+
+      // 1) Pillar table: title row in col A contains phrase + month
+      const pillarPhrase = "Local contents 2026 - no. of Local produced content by pillar";
+      let pillarTitleRow = null;
+      for (let r = r2range.s.r; r <= r2range.e.r; r++) {
+        const cellA = getCellObjRC(ws2, r, 0);
+        const s = String(cellA?.v ?? "").trim();
+        if (!s) continue;
+        const sl = s.toLowerCase();
+        if (!sl.includes(pillarPhrase.toLowerCase())) continue;
+
+        // month match: usually "(January)" 포함
+        const ml = monthEn.toLowerCase();
+        const okMonth =
+          sl.includes(ml) ||
+          (ml.startsWith("feb") && sl.includes("feb")); // Febraury 오타 케이스 포함
+        if (!okMonth) continue;
+
+        pillarTitleRow = r;
+        break;
+      }
+
+      if (pillarTitleRow !== null) {
+        const headerRow = pillarTitleRow + 1;
+
+        // find columns by header labels
+        const want = {
+          brand: ["brand"],
+          product: ["product"],
+          motorsports: ["motorsports"],
+          formulae: ["formula e","formulae","formula e "],
+          info: ["info", "info.", "enter", "entertaining"],
+          total: ["total"]
+        };
+        const colMap = { brand: null, product: null, motorsports: null, formulae: null, info: null, total: null };
+
+        for (let c = r2range.s.c; c <= r2range.e.c; c++) {
+          const cell = getCellObjRC(ws2, headerRow, c);
+          const s = String(cell?.v ?? "").trim().toLowerCase();
+          if (!s) continue;
+
+          for (const k of Object.keys(want)) {
+            if (colMap[k] !== null) continue;
+            if (want[k].some(w => s.includes(w))) colMap[k] = c;
+          }
+        }
+
+        // find total row
+        let totalRow = null;
+        for (let r = pillarTitleRow + 2; r <= pillarTitleRow + 20 && r <= r2range.e.r; r++) {
+          const cellA = getCellObjRC(ws2, r, 0);
+          const s = String(cellA?.v ?? "").trim().toLowerCase();
+          if (s === "total") { totalRow = r; break; }
+        }
+
+        if (totalRow !== null) {
+          ref2LocalPillarTotal.brand = numFromCell(getCellObjRC(ws2, totalRow, colMap.brand));
+          ref2LocalPillarTotal.product = numFromCell(getCellObjRC(ws2, totalRow, colMap.product));
+          ref2LocalPillarTotal.motorsports = numFromCell(getCellObjRC(ws2, totalRow, colMap.motorsports));
+          ref2LocalPillarTotal.formulae = numFromCell(getCellObjRC(ws2, totalRow, colMap.formulae));
+          ref2LocalPillarTotal.info = numFromCell(getCellObjRC(ws2, totalRow, colMap.info));
+          ref2LocalPillarTotal.total = numFromCell(getCellObjRC(ws2, totalRow, colMap.total));
+        }
+      }
+
+      // 2) Utilized vs Local table: title row in col A contains phrase
+      const utilPhrase = "Local contents 2026 - no. of Utilized and Local produced content";
+      let utilTitleRow = null;
+      for (let r = r2range.s.r; r <= r2range.e.r; r++) {
+        const cellA = getCellObjRC(ws2, r, 0);
+        const s = String(cellA?.v ?? "").trim().toLowerCase();
+        if (!s) continue;
+        if (s.includes(utilPhrase.toLowerCase())) { utilTitleRow = r; break; }
+      }
+
+      if (utilTitleRow !== null && monthNumFromM3) {
+        // find month row: within next 10 rows find cell exactly like "1월"
+        const mLabel = `${monthNumFromM3}월`;
+        let monthRow = null;
+        let startCol = null;
+        for (let r = utilTitleRow; r <= utilTitleRow + 12 && r <= r2range.e.r; r++) {
+          for (let c = r2range.s.c; c <= r2range.e.c; c++) {
+            const cell = getCellObjRC(ws2, r, c);
+            const s = String(cell?.v ?? "").trim();
+            if (s === mLabel) { monthRow = r; startCol = c; break; }
+          }
+          if (monthRow !== null) break;
+        }
+
+        // find header row where col A == "Country"
+        let headerRow = null;
+        for (let r = utilTitleRow; r <= utilTitleRow + 20 && r <= r2range.e.r; r++) {
+          const s = String(getCellObjRC(ws2, r, 0)?.v ?? "").trim().toLowerCase();
+          if (s === "country") { headerRow = r; break; }
+        }
+
+        // data rows below header row
+        if (headerRow !== null && startCol !== null) {
+          const countryCol = 1; // column B has country names in this file
+          const localCol = startCol;
+          const hqCol = startCol + 1;
+          const subCol = startCol + 2;
+
+          // build index map for quick match
+          const wantedSet = new Set(KEY_COUNTRIES.map(x => norm(x)));
+          for (let r = headerRow + 1; r <= r2range.e.r; r++) {
+            const cName = String(getCellObjRC(ws2, r, countryCol)?.v ?? "").trim();
+            if (!cName) continue;
+
+            const local = numFromCell(getCellObjRC(ws2, r, localCol));
+            const hq = numFromCell(getCellObjRC(ws2, r, hqCol));
+            const sub = numFromCell(getCellObjRC(ws2, r, subCol));
+
+            // all countries table (B5~B41 / B~E)
+            ref2HqLocalCountsAll.push({ country: cName, local, hq, subtotal: sub });
+
+            // key 17 countries for ratio chart
+            if (wantedSet.has(norm(cName))) {
+              ref2HqLocalCounts.push({ country: cName, local, hq, subtotal: sub });
+            }
+          }
+
+          // keep the desired order
+          const order = new Map(KEY_COUNTRIES.map((c, i) => [norm(c), i]));
+          ref2HqLocalCounts.sort((a,b) => (order.get(norm(a.country)) ?? 999) - (order.get(norm(b.country)) ?? 999));
+        }
+      }
+    }
+  }
+
+
+  // Contents Top3: Ref1 AO88~AO90 rate, AP88~AP90 name (rows 87~89 0-based)
+  const topContentsRaw = [87, 88, 89].map(rr => ({
+    name: String(getCellValue(ws1, rr, "AP") ?? "").trim(),
+    rate: toPct(getCellValue(ws1, rr, "AO"))
+  })).filter(x => x.name);
+
+  // Ref4: URL 매칭만
+  const REF4_NAME = "Ref4.HQ Distribution Contents M";
+  const ref4Name = wb.SheetNames.includes(REF4_NAME) ? REF4_NAME : null;
+  const ws4 = ref4Name ? wb.Sheets[ref4Name] : null;
+
+  const topContents = topContentsRaw.map(item => ({
+    ...item,
+    url: "",
+    ref4Row1: null
+  }));
+
+  if (ws4) {
+    const r4ref = ws4["!ref"];
+    if (r4ref) {
+      const r4range = XLSX.utils.decode_range(r4ref);
+      const normalize = (s) => String(s ?? "").trim().toLowerCase().replace(/\s+/g," ");
+      const targets = topContents.map(t => normalize(t.name));
+
+      for (let r = r4range.s.r; r <= r4range.e.r; r++) {
+        const ref4Title = normalize(getCellValue(ws4, r, "C"));
+        if (!ref4Title) continue;
+
+        for (let i = 0; i < targets.length; i++) {
+          if (topContents[i].url) continue;
+          const t = targets[i];
+          if (!t) continue;
+
+          const hit = (ref4Title === t || ref4Title.includes(t) || t.includes(ref4Title));
+          if (!hit) continue;
+
+          const url = getCellLinkOrValue(ws4, r, "J");
+          topContents[i].url = safeUrl(String(url || "").trim());
+          topContents[i].ref4Row1 = r + 1;
+        }
+      }
+    }
+  }
+
+  // =======================
+  // Utilization Status Report: B17~N20 테이블(리포트 화면에서 그대로 표시)
+  // =======================
+  const extractRangeMatrix = (ws, startA1, endA1) => {
+    if (!ws) return null;
+    const range = XLSX.utils.decode_range(`${startA1}:${endA1}`);
+    const out = [];
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      const row = [];
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: R, c: C });
+        const cell = ws[addr];
+        let val = "";
+        if (cell) {
+          // w = 표시용 포맷 문자열(퍼센트 등), 없으면 v 사용
+          val = (cell.w !== undefined && cell.w !== null) ? cell.w : cell.v;
+          if (val === undefined || val === null) val = "";
+        }
+        row.push(String(val));
+      }
+      out.push(row);
+    }
+    return out;
+  };
+
+  const REPORT_SHEET = "Utilization Status Report";
+  const reportSheetName =
+    wb.SheetNames.includes(REPORT_SHEET) ? REPORT_SHEET :
+    (wb.SheetNames.find(n => String(n).toLowerCase().includes("utilization status report")) || null);
+
+  const wsReport = reportSheetName ? wb.Sheets[reportSheetName] : null;
+  const reportUtilTable = wsReport ? extractRangeMatrix(wsReport, "B17", "N20") : null;
+
+
+  return {
+    month: guessMonth(file.name, ref1Name),
+    periodLabel: period.label,
+    periodStart: period.start,
+    periodEnd: period.end,
+    periodSource: period.source,
+    monthCellM3: monthCellM3,
+    sheetName: ref1Name,
+    ref4Name,
+        reportSheetName,
+    reportUtilTable,
+countries,
+    missing,
+    summaryCells,
+    topContents,
+    pillarAvg37,
+    pillarAvgRow46,
+    ref2LocalPillarTotal,
+    ref2HqLocalCounts,
+    ref2HqLocalCountsAll
+  };
+}
+
+/* =======================
+   State
+======================= */
+const state = {
+  raw: null,
+  mode: "MON",
+  view: "DASH", // DASH | REPORT
+  filtered: [],
+  charts: { country: null, tier: null, pillar: null, content: null, reportCum: null, reportMon: null, reportPillar: null, reportContent: null, reportRef2Pillar: null, reportRef2HqLocal: null, reportRef2Ratio: null }
+};
+
+function setMode(mode, silent=false) {
+  state.mode = mode;
+  const cumBtn = document.getElementById("modeCumBtn");
+  const monBtn = document.getElementById("modeMonBtn");
+
+  if (mode === "CUM") { cumBtn.classList.add("chip-active"); monBtn.classList.remove("chip-active"); }
+  else { monBtn.classList.add("chip-active"); cumBtn.classList.remove("chip-active"); }
+
+  document.getElementById("countryChartTitle").textContent =
+    `국가별 Total 활용률 (${mode === "CUM" ? "누적" : "월간"})`;
+  document.getElementById("pillarTitle").textContent =
+    `Pillar 평균 활용률 (${mode === "CUM" ? "누적" : "월간"})`;
+  document.getElementById("tierTitle").textContent =
+    `활용률 Group 분포 (${mode === "CUM" ? "누적 Group" : "월간 Group"})`;
+
+  const contentsSection = document.getElementById("contentsSection");
+  if (mode === "MON") {
+    contentsSection.classList.remove("hidden");
+    renderContentTop3Chart();
+  } else {
+    contentsSection.classList.add("hidden");
+  }
+
+  applyFilters();
+  renderSummary();
+
+  if (!silent) toast({ title: "모드 변경", description: `${mode === "CUM" ? "누적" : "월간"} 기준으로 갱신했습니다.` });
+}
+
+function monthToReportTitle(monthStr) {
+  const m = String(monthStr ?? "").trim();
+
+  // "YYYY-MM" or "????-MM"
+  const hit = m.match(/^(?:\d{4}|\?\?\?\?)-(0[1-9]|1[0-2])$/);
+  if (hit) return `${Number(hit[1])}월 법인 활용률 보고서 요약`;
+
+  // "1월" 같은 형식
+  const hit2 = m.match(/^(1[0-2]|[1-9])\s*월$/);
+  if (hit2) return `${Number(hit2[1])}월 법인 활용률 보고서 요약`;
+
+  if (m === "Unknown") return "법인 활용률 보고서 요약";
+  return `${m} 법인 활용률 보고서 요약`;
+}
+function setView(view) {
+  state.view = view;
+  const dashBtn = document.getElementById("viewDashBtn");
+  const reportBtn = document.getElementById("viewReportBtn");
+  const dashContent = document.getElementById("dashContent");
+  const reportContent = document.getElementById("reportContent");
+
+  if (view === "REPORT") {
+    reportBtn.classList.add("chip-active");
+    dashBtn.classList.remove("chip-active");
+    if (dashContent) dashContent.classList.add("hidden");
+    if (reportContent) reportContent.classList.remove("hidden");
+
+    // ✅ 리포트 화면 진입 시 텍스트 + 그래프 렌더
+    renderReport();
+  } else {
+    dashBtn.classList.add("chip-active");
+    reportBtn.classList.remove("chip-active");
+    if (dashContent) dashContent.classList.remove("hidden");
+    if (reportContent) reportContent.classList.add("hidden");
+  }
+}
+
+function countryKo(name) {
+  const n = String(name ?? "").trim();
+  if (!n) return n;
+
+  const key = n.toLowerCase().replace(/\./g,"").replace(/\s+/g," ").trim();
+
+  // 자주 쓰는 케이스만 우선 매핑 (없는 경우 원문 유지)
+  const map = {
+    "vietnam":"베트남",
+    "malaysia":"말레이시아",
+    "brazil":"브라질",
+    "indonesia":"인도네시아",
+    "united kingdom":"영국",
+    "uk":"영국",
+    "u k":"영국",
+    "england":"영국",
+    "australia":"호주",
+    "taiwan":"대만",
+    "thailand":"태국",
+    "singapore":"싱가포르",
+    "philippines":"필리핀",
+    "hong kong":"홍콩",
+    "india":"인도",
+    "japan":"일본",
+    "china":"중국",
+    "korea":"한국",
+    "south korea":"한국",
+    "republic of korea":"한국",
+    "united states":"미국",
+    "usa":"미국",
+    "u s a":"미국",
+    "united arab emirates":"아랍에미리트",
+    "uae":"아랍에미리트",
+    "saudi arabia":"사우디아라비아",
+    "mexico":"멕시코",
+    "canada":"캐나다",
+    "spain":"스페인",
+    "italy":"이탈리아",
+    "france":"프랑스",
+    "germany":"독일",
+    "netherlands":"네덜란드",
+    "poland":"폴란드",
+    "turkey":"터키",
+    "russia":"러시아",
+    "south africa":"남아프리카공화국",
+    "argentina":"아르헨티나",
+    "chile":"칠레",
+    "peru":"페루",
+    "colombia":"콜롬비아",
+    "hungary":"헝가리",
+    "jeddah":"사우디",
+    "sao paulo, brasil":"브라질",
+    "sao paulo brasil":"브라질",
+    "new zealand":"뉴질랜드",
+    "sweden":"스웨덴",
+    "norway":"노르웨이",
+    "denmark":"덴마크",
+    "finland":"핀란드",
+    "belgium":"벨기에",
+    "switzerland":"스위스",
+    "austria":"오스트리아",
+    "czech republic":"체코",
+    "romania":"루마니아",
+    "greece":"그리스",
+    "portugal":"포르투갈",
+    "ireland":"아일랜드",
+    "egypt":"이집트",
+    "morocco":"모로코"
+  };
+
+  return map[key] || n;
+}
+
+function buildReportText() {
+  if (!state.raw) return "";
+  const cells = state.raw.summaryCells || {};
+  const ghqCumContents = Number(cells.ghqCumContents ?? 0);
+  const ghqMonContents = Number(cells.ghqMonContents ?? 0);
+  const cumUsed = Number(cells.cumUsed ?? 0);
+  const cumAvail = Number(cells.cumAvail ?? 0);
+  const monUsed = Number(cells.monUsed ?? 0);
+  const monAvail = Number(cells.monAvail ?? 0);
+
+  const cumRate = (cumAvail > 0) ? (cumUsed / cumAvail * 100) : 0;
+  const monRate = (monAvail > 0) ? (monUsed / monAvail * 100) : 0;
+
+  const topCum = topKByTotal("CUM", 3);
+  const groupsMon = groupByPct("MON").filter(([pct]) => pct > 0);
+  const top3Groups = groupsMon.slice(0, 3).map(([pct, countries]) => ({ pct, countries }));
+
+  // ✅ 리포트의 Pillar Top3는 '누적' 기준 고정
+  const pillars = top3Pillars("CUM");
+
+  const contents = state.raw.topContents || [];
+
+  const topCumSentence = (() => {
+    const a = topCum[0], b = topCum[1], c = topCum[2];
+    if (!a) return `국가별 누적 활용률 Top3 데이터가 없어 산출하지 못했습니다.`;
+    const parts = [a,b,c].filter(Boolean).map(x => `${countryKo(x.country)} ${fmtPct(x.pct)}`);
+    return `국가별 "누적" 활용률이 가장 높은 국가는 ${parts[0]}를 기록하였으며, 그 다음으로는 ${parts[1] || "-"}, ${parts[2] || "-"} 순으로 나타났습니다.`;
+  })();
+
+  const topMonSentence = (() => {
+    if (!top3Groups.length) return `국가별 월간 활용률 Top3 데이터가 없어 산출하지 못했습니다.`;
+    const fmtGroup = (g) => `${(g.countries || ["-"]).map(countryKo).join(", ")} ${fmtPct(g.pct)}`;
+    const p1 = fmtGroup(top3Groups[0] || {});
+    const p2 = fmtGroup(top3Groups[1] || {});
+    const p3 = fmtGroup(top3Groups[2] || {});
+    return `국가별 "월간" 활용률의 경우 ${p1}, ${p2}, ${p3} 활용하여 Top3를 기록하였습니다.`;
+  })();
+
+  const pillarSentence = (() => {
+    const a = pillars[0], b = pillars[1], c = pillars[2];
+    if (!a) return `Pillar별 활용률 Top3 데이터가 없어 산출하지 못했습니다.`;
+    return `Pillar별 활용률은 ${a.label} 컨텐츠가 ${fmtPct(a.pct)}로 가장 높았으며, ${b?.label ?? "-"}가 ${fmtPct(b?.pct ?? 0)}, ${c?.label ?? "-"}가 ${fmtPct(c?.pct ?? 0)}를 기록하였습니다.`;
+  })();
+
+  const contentSentence = (() => {
+    if (!contents.length) return `컨텐츠 자체 활용도 Top3 데이터가 없어 산출하지 못했습니다.`;
+    const a = contents[0], b = contents[1], c = contents[2];
+    const parts = [a,b,c].filter(Boolean).map(x => `${x.name} ${fmtPct(x.rate)}`);
+    // "차지하였습니다" 문장 톤 반영
+    if (a) {
+      return `컨텐츠 자체 활용도는 ${parts[0]}가 가장 높은 비중을 차지하였으며, ${parts[1] || "-"}, ${parts[2] || "-"} 순으로 나타났습니다.`;
+    }
+    return `컨텐츠 자체 활용도 Top3 데이터가 없어 산출하지 못했습니다.`;
+  })();
+
+
+  const publishTop3Sentence = (() => {
+    const rows = (state.raw.ref2HqLocalCountsAll || []).filter(x => Number(x?.subtotal ?? 0) > 0);
+    if (!rows.length) return `로컬 컨텐츠 발행 개수 Top3 데이터가 없어 산출하지 못했습니다.`;
+
+    const top = [...rows].sort((a,b) => Number(b.subtotal ?? 0) - Number(a.subtotal ?? 0)).slice(0, 3);
+    const parts = top.map(x => `${countryKo(x.country)} ${fmtInt(x.subtotal)}건`);
+    return `총 발행 건 수는 ${parts.join(", ")}으로 Top3를 차지했습니다.`;
+  })();
+
+  const lines = [
+    `GHQ에서 배포한 ${fmtInt(ghqCumContents)}개 컨텐츠의 법인 누적 활용률은 ${fmtPct(cumRate)}를 기록하였습니다. (ref. 법인활용 컨텐츠 수 / 법인 활용가능 컨텐츠 수 = ${fmtInt(cumUsed)} / ${fmtInt(cumAvail)} = ${fmtPct(cumRate)})`,
+    `GHQ에서 배포한 ${fmtInt(ghqMonContents)}개 컨텐츠의 법인 월간 활용률은 ${fmtPct(monRate)}를 기록하였습니다. (ref. 월간 법인활용 컨텐츠 수 / 월간 법인 활용가능 컨텐츠 수 = ${fmtInt(monUsed)} / ${fmtInt(monAvail)} = ${fmtPct(monRate)})`,
+topCumSentence,
+    topMonSentence,
+    pillarSentence,
+    contentSentence,
+    publishTop3Sentence
+];
+  return lines.map(x => `- ${x}`).join("\n");
+}
+
+function renderReport() {
+  if (!state.raw) return;
+  const titleEl = document.getElementById("reportTitle");
+  if (titleEl) titleEl.textContent = monthToReportTitle(state.raw.periodLabel || state.raw.month);
+
+  const pre = document.getElementById("reportText");
+  if (pre) pre.textContent = buildReportText();
+
+  renderReportUtilTable();
+
+  renderReportCharts();
+  renderReportWarnings();
+}
+
+
+
+function renderReportUtilTable() {
+  const card = document.getElementById("reportUtilTableCard");
+  const tableEl = document.getElementById("reportUtilTable");
+  if (!card || !tableEl) return;
+
+  const matrix = state.raw?.reportUtilTable;
+  if (!matrix || !matrix.length) {
+    // 데이터가 없으면 카드 숨김
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+
+  const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  const header = matrix[0] || [];
+  const body = matrix.slice(1);
+
+  const thead = `<thead class="bg-slate-50">
+    <tr>
+      ${header.map(h => `<th class="px-3 py-2 text-left font-semibold text-slate-700 border-b">${esc(h)}</th>`).join("")}
+    </tr>
+  </thead>`;
+
+  const tbody = `<tbody>
+    ${body.map(row => `
+      <tr class="odd:bg-white even:bg-slate-50/30">
+        ${row.map(v => `<td class="px-3 py-2 text-slate-800 border-b whitespace-nowrap">${esc(v)}</td>`).join("")}
+      </tr>
+    `).join("")}
+  </tbody>`;
+
+  tableEl.innerHTML = thead + tbody;
+}
+
+
+function renderReportWarnings() {
+  if (!state.raw) return;
+  const rows = state.raw.countries || [];
+
+  const fill = (mode, elId) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const warnings = rows
+      .map(r => ({ country: r.country, pct: Number(getTotalMode(r, mode) || 0) }))
+      .filter(x => x.pct < 10)
+      .sort((a,b) => a.pct - b.pct);
+
+    if (!warnings.length) {
+      el.innerHTML = `<div class="text-sm font-medium text-emerald-700">없음 🎉 (10% 미만 국가가 없습니다)</div>`;
+      return;
+    }
+
+    el.innerHTML = warnings
+      .map(w => `<div class="flex items-center justify-between gap-3">
+        <span class="font-medium text-rose-700">${countryKo(w.country)}</span>
+        <span class="text-rose-700">${fmtPct(w.pct)}</span>
+      </div>`)
+      .join("");
+  };
+
+  fill("CUM", "reportWarningCumList");
+  fill("MON", "reportWarningMonList");
+}
+
+function renderReportCharts() {
+  if (!state.raw) return;
+
+  // destroy previous report charts
+  if (state.charts.reportCum) { state.charts.reportCum.destroy(); state.charts.reportCum = null; }
+  if (state.charts.reportMon) { state.charts.reportMon.destroy(); state.charts.reportMon = null; }
+  if (state.charts.reportPillar) { state.charts.reportPillar.destroy(); state.charts.reportPillar = null; }
+  if (state.charts.reportContent) { state.charts.reportContent.destroy(); state.charts.reportContent = null; }
+  if (state.charts.reportRef2Pillar) { state.charts.reportRef2Pillar.destroy(); state.charts.reportRef2Pillar = null; }
+  if (state.charts.reportRef2HqLocal) { state.charts.reportRef2HqLocal.destroy(); state.charts.reportRef2HqLocal = null; }
+  if (state.charts.reportRef2Ratio) { state.charts.reportRef2Ratio.destroy(); state.charts.reportRef2Ratio = null; }
+
+  const rows = state.raw.countries || [];
+  const sortedByCum = [...rows].sort((a,b)=>(b.cum?.total ?? 0)-(a.cum?.total ?? 0));
+  const sortedByMon = [...rows].sort((a,b)=>(b.mon?.total ?? 0)-(a.mon?.total ?? 0));
+
+  // 1) 누적 활용률 그래프
+  const cumCanvas = document.getElementById("reportCumUtilChart");
+  if (cumCanvas) {
+    const ctx = cumCanvas.getContext("2d");
+    const labels = sortedByCum.map(d => countryKo(d.country));
+    const values = sortedByCum.map(d => Number(((d.cum?.total ?? 0)).toFixed(2)));
+    const barColors = values.map(v => (v <= 10 ? HK.warning : HK.orange));
+
+    state.charts.reportCum = new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets: [{ label: "Total(%)", data: values, backgroundColor: barColors, borderColor: barColors, borderWidth: 1 }] },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (c) => `Total: ${c.parsed.y.toFixed(1)}%` } },
+          multiThresholdPlugin: {
+            lines: [
+              { yValue: 30, label: "30% 기준", color: HK.black, dash: [6,6], width: 2 },
+              { yValue: 10, label: "10% 기준", color: HK.warning, dash: [4,4], width: 2 }
+            ]
+          }
+        },
+        scales: { y: { beginAtZero: true, max: 100 } }
+      }
+    });
+  }
+
+  // 2) 월간 활용률 그래프
+  const monCanvas = document.getElementById("reportMonUtilChart");
+  if (monCanvas) {
+    const ctx = monCanvas.getContext("2d");
+    const labels = sortedByMon.map(d => countryKo(d.country));
+    const values = sortedByMon.map(d => Number(((d.mon?.total ?? 0)).toFixed(2)));
+    const barColors = values.map(v => (v <= 10 ? HK.warning : HK.orange));
+
+    state.charts.reportMon = new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets: [{ label: "Total(%)", data: values, backgroundColor: barColors, borderColor: barColors, borderWidth: 1 }] },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (c) => `Total: ${c.parsed.y.toFixed(1)}%` } },
+          multiThresholdPlugin: {
+            lines: [
+              { yValue: 30, label: "30% 기준", color: HK.black, dash: [6,6], width: 2 },
+              { yValue: 10, label: "10% 기준", color: HK.warning, dash: [4,4], width: 2 }
+            ]
+          }
+        },
+        scales: { y: { beginAtZero: true, max: 100 } }
+      }
+    });
+  }
+
+  // 3) Pillar 누적 그래프 (시트 평균값 우선)
+  const pillarCanvas = document.getElementById("reportPillarCumChart");
+  if (pillarCanvas) {
+    const ctx = pillarCanvas.getContext("2d");
+    const keys = ["brand","product","motorsports","formulae","info"];
+    const labelMap = { brand:"브랜딩", product:"제품", motorsports:"모터스포츠", formulae:"Formula E", info:"정보/엔터" };
+
+    const avgRow46 = state.raw?.pillarAvgRow46?.CUM;
+    const avg37 = state.raw?.pillarAvg37?.CUM;
+
+    let values;
+    if (avgRow46) values = keys.map(k => Number(((avgRow46[k] ?? 0)).toFixed(2)));
+    else if (avg37) values = keys.map(k => Number(((avg37[k]?.avg ?? 0)).toFixed(2)));
+    else values = keys.map(_ => 0);
+
+    state.charts.reportPillar = new Chart(ctx, {
+      type: "bar",
+      data: { labels: keys.map(k => labelMap[k]), datasets: [{ label:"Avg(%)", data: values, backgroundColor: HK.gray, borderColor: HK.gray, borderWidth: 1 }] },
+      options: { responsive: true, plugins: { legend: { display:false } }, scales: { y: { beginAtZero:true, max:100 } } }
+    });
+  }
+
+  // 4) 컨텐츠 Top3 그래프 (월간 데이터)
+  const top = state.raw?.topContents || [];
+  const emptyMsg = document.getElementById("reportContentTop3Empty");
+  const contentCanvas = document.getElementById("reportContentTop3Chart");
+
+  if (!top.length) {
+    if (emptyMsg) emptyMsg.classList.remove("hidden");
+    if (contentCanvas) contentCanvas.classList.add("hidden");
+  } else {
+    if (emptyMsg) emptyMsg.classList.add("hidden");
+    if (contentCanvas) contentCanvas.classList.remove("hidden");
+  }
+
+  if (contentCanvas && top.length) {
+    const ctx = contentCanvas.getContext("2d");
+    const labels = top.map(x => shortenLabel(x.name, 28));
+    const values = top.map(x => Number((x.rate ?? 0).toFixed(2)));
+
+    state.charts.reportContent = new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets: [{ label:"Utilization(%)", data: values, backgroundColor: HK.orange, borderColor: HK.orange, borderWidth: 1 }] },
+      options: {
+        responsive: true,
+        onClick: (evt, elements) => {
+          const idx = elements?.[0]?.index;
+          if (idx === undefined) return;
+          const url = top[idx]?.url;
+          if (url) window.open(url, "_blank", "noopener,noreferrer");
+          else toast({ title:"URL 없음", description:"Ref4에서 URL(J열)을 찾지 못했어요.", variant:"destructive" });
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => {
+                const idx = items?.[0]?.dataIndex ?? 0;
+                return top[idx]?.name || "(no name)";
+              },
+              label: (c) => `사용률: ${c.parsed.y.toFixed(1)}%`
+            }
+          },
+          barValueLabelPlugin: { color: "rgba(0,0,0,0.85)" }
+        },
+        scales: { y: { beginAtZero:true, max:100 } }
+      }
+    });
+  }
+
+  // 5~7) Ref2 기반 추가 그래프 (리포트 토글 전용)
+  renderReportRef2Charts();
+
+}
+
+function renderReportRef2Charts() {
+  // NOTE: Report 탭이 열려서 캔버스가 실제 크기를 가진 상태에서 호출되어야 Chart.js가 정상 렌더됩니다.
+  const monthTag1 = document.getElementById("reportRef2PillarMonthTag");
+  const monthTag2 = document.getElementById("reportRef2HqLocalMonthTag");
+  const monthTag3 = document.getElementById("reportRef2RatioMonthTag");
+
+  const pillar2 = state.raw?.ref2LocalPillarTotal || null;
+  const hqLocalKey = state.raw?.ref2HqLocalCounts || [];
+  const hqLocalAll = state.raw?.ref2HqLocalCountsAll || hqLocalKey;
+
+  const monthEn = pillar2?.monthEn || "-";
+  if (monthTag1) monthTag1.textContent = monthEn;
+  if (monthTag2) monthTag2.textContent = monthEn;
+  if (monthTag3) monthTag3.textContent = monthEn;
+
+  // 5) 로컬 컨텐츠 필라별 구성
+  const pillar2Canvas = document.getElementById("reportRef2PillarChart");
+  const pillar2Empty = document.getElementById("reportRef2PillarEmpty");
+
+  const pillar2Vals = pillar2 ? [
+    { k: "Brand", v: Number(pillar2.brand ?? 0) },
+    { k: "Product", v: Number(pillar2.product ?? 0) },
+    { k: "Motorsports", v: Number(pillar2.motorsports ?? 0) },
+    { k: "Formula E", v: Number(pillar2.formulae ?? 0) },
+    { k: "Info", v: Number(pillar2.info ?? 0) }
+  ] : [];
+
+  const pillar2Has = pillar2Vals.some(x => Number.isFinite(x.v) && x.v > 0);
+
+  if (!pillar2Canvas || !pillar2Has || typeof Chart === "undefined") {
+    if (pillar2Empty) pillar2Empty.classList.remove("hidden");
+    if (pillar2Canvas) pillar2Canvas.classList.add("hidden");
+  } else {
+    if (pillar2Empty) pillar2Empty.classList.add("hidden");
+    pillar2Canvas.classList.remove("hidden");
+
+    const ctx = pillar2Canvas.getContext("2d");
+    state.charts.reportRef2Pillar = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: pillar2Vals.map(x => x.k),
+        datasets: [{
+          label: "Count",
+          data: pillar2Vals.map(x => x.v),
+          backgroundColor: [HK.orange, HK.black, HK.gray, HK.orange, HK.black],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false }, barValueLabelPlugin: false },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+  }
+
+  // 6) 로컬 컨텐츠 발행 개수 (HQ vs Local)
+  const hqLocalCanvas = document.getElementById("reportRef2HqLocalStackChart");
+  const hqLocalEmpty = document.getElementById("reportRef2HqLocalEmpty");
+
+  if (!hqLocalCanvas || !hqLocalAll.length || typeof Chart === "undefined") {
+    if (hqLocalEmpty) hqLocalEmpty.classList.remove("hidden");
+    if (hqLocalCanvas) hqLocalCanvas.classList.add("hidden");
+  } else {
+    if (hqLocalEmpty) hqLocalEmpty.classList.add("hidden");
+    hqLocalCanvas.classList.remove("hidden");
+
+
+    // ✅ Show ALL countries (Ref2 B5~B41) and sort by subtotal desc (but display only HQ/Local series)
+    const sortedAll = [...hqLocalAll]
+      .filter(x => String(x.country ?? "").trim())
+      .sort((a,b) => Number(b.subtotal ?? 0) - Number(a.subtotal ?? 0));
+
+    const labels = sortedAll.map(x => countryKo(x.country));
+    const localVals = sortedAll.map(x => Number(x.local ?? 0));
+    const hqVals = sortedAll.map(x => Number(x.hq ?? 0));
+const ctx = hqLocalCanvas.getContext("2d");
+    state.charts.reportRef2HqLocal = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          { label: "Local", data: localVals, backgroundColor: HK.orange, borderRadius: 6, stack: "s" },
+          { label: "HQ", data: hqVals, backgroundColor: HK.black, borderRadius: 6, stack: "s" }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "top" },
+          tooltip: {
+            callbacks: {
+              label: (c) => `${c.dataset.label}: ${fmtInt(c.raw)}`
+            }
+          }
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            ticks: { stepSize: 5, precision: 0, callback: (v) => v }
+          }
+        }
+      }
+    });
+}
+
+  // 7) 주요국가 HQ vs Local 비율 (100%)
+  const ratioCanvas = document.getElementById("reportRef2RatioChart");
+  const ratioEmpty = document.getElementById("reportRef2RatioEmpty");
+
+  if (!ratioCanvas || !hqLocalKey.length || typeof Chart === "undefined") {
+    if (ratioEmpty) ratioEmpty.classList.remove("hidden");
+    if (ratioCanvas) ratioCanvas.classList.add("hidden");
+  } else {
+    const totals = hqLocalKey.map(x => Math.max(0, Number(x.local ?? 0)) + Math.max(0, Number(x.hq ?? 0)));
+    const hasAny = totals.some(t => t > 0);
+
+    if (!hasAny) {
+      if (ratioEmpty) ratioEmpty.classList.remove("hidden");
+      ratioCanvas.classList.add("hidden");
+      return;
+    }
+
+    if (ratioEmpty) ratioEmpty.classList.add("hidden");
+    ratioCanvas.classList.remove("hidden");
+
+    const rows = hqLocalKey.map((x,i) => {
+  const total = totals[i] || 0;
+  const lp = total ? (Number(x.local ?? 0) / total * 100) : 0;
+  const hp = total ? (Number(x.hq ?? 0) / total * 100) : 0;
+  return { _i: i, label: countryKo(x.country), localPct: lp, hqPct: hp };
+});
+
+// ✅ local% 높은 순서로 정렬 (동률이면 기존 국가 순서 유지)
+rows.sort((a,b) => (b.localPct - a.localPct) || (a._i - b._i));
+
+const labels = rows.map(r => r.label);
+const localPct = rows.map(r => r.localPct);
+const hqPct = rows.map(r => r.hqPct);
+
+    const ctx = ratioCanvas.getContext("2d");
+    state.charts.reportRef2Ratio = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          { label: "Local %", data: localPct, backgroundColor: HK.orange, stack: "p" },
+          { label: "HQ %", data: hqPct, backgroundColor: HK.black, stack: "p" }
+        ]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        plugins: {
+          legend: { position: "bottom" },
+          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.x.toFixed(1)}%` } }
+        },
+        scales: {
+          x: { stacked: true, beginAtZero: true, max: 100, ticks: { callback: (v)=> `${v}%` } },
+          y: { stacked: true }
+        }
+      }
+    });
+  }
+}
+
+
+
+
+function getTotal(d) { return (state.mode === "CUM") ? d.cum.total : d.mon.total; }
+
+function getTotalMode(d, mode) { return (mode === "CUM") ? d.cum.total : d.mon.total; }
+
+function showDashboard(data) {
+  document.getElementById("uploadView").classList.add("hidden");
+  document.getElementById("dashboardView").classList.remove("hidden");
+
+  // 기본 보기: 리포트
+  setView("REPORT");
+
+  const monthBadge = document.getElementById("monthBadge");
+  monthBadge.textContent = (() => {
+    // ✅ Ref2 기간 테이블이 있으면 "n월 데이터 start ~ end" 형식으로 표시
+    if (data.periodLabel && data.periodStart && data.periodEnd) {
+      return `${data.periodLabel} 데이터 ${data.periodStart} ~ ${data.periodEnd}`;
+    }
+    // fallback: 기존 로직
+    return `${data.month} 데이터`;
+  })();
+  monthBadge.classList.remove("hidden");
+setMode("MON", true);
+  applyFilters();
+  renderSummary();
+  renderDebug();
+
+
+
+}
+
+function applyFilters() {
+  const q = (document.getElementById("searchInput").value || "").trim().toLowerCase();
+  const src = state.raw?.countries || [];
+  state.filtered = src.filter(d => !q || d.country.toLowerCase().includes(q));
+
+  renderStats(state.filtered);
+  renderTable(state.filtered);
+  renderCharts(state.filtered);
+
+  const hint = [state.mode === "CUM" ? "누적" : "월간", q ? `검색: ${q}` : null].filter(Boolean).join(" · ");
+  document.getElementById("chartHint").textContent = hint || "전체";
+}
+
+function renderStats(rows) {
+  document.getElementById("countryCount").textContent = rows.length.toLocaleString();
+
+  // 누적/월간 활용률 KPI는 모드 토글과 무관하게 "항상 고정" 표시
+  // 누적/월간 활용률 KPI는 모드 토글과 무관하게 "항상 고정" 표시
+  // ✅ 우선: Ref1 요약(분자/분모) 기반 전체 활용률 (국가 평균이 아님)
+  const sc = state.raw?.summaryCells || {};
+  const hasCum = Number.isFinite(Number(sc.cumUsed)) && Number.isFinite(Number(sc.cumAvail)) && Number(sc.cumAvail) > 0;
+  const hasMon = Number.isFinite(Number(sc.monUsed)) && Number.isFinite(Number(sc.monAvail)) && Number(sc.monAvail) > 0;
+
+  const cumPct = hasCum ? (Number(sc.cumUsed) / Number(sc.cumAvail) * 100) : (
+    rows.length ? (rows.reduce((a,b)=>a + (b.cum?.total ?? 0), 0) / rows.length) : 0
+  );
+  const monPct = hasMon ? (Number(sc.monUsed) / Number(sc.monAvail) * 100) : (
+    rows.length ? (rows.reduce((a,b)=>a + (b.mon?.total ?? 0), 0) / rows.length) : 0
+  );
+
+
+  const cumEl = document.getElementById("cumUtil");
+  const monEl = document.getElementById("monUtil");
+  if (cumEl) cumEl.textContent = `${cumPct.toFixed(1)}%`;
+  if (monEl) monEl.textContent = `${monPct.toFixed(1)}%`;
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
+  const sorted = [...rows].sort((a,b)=>getTotal(b)-getTotal(a));
+
+  for (const r of sorted) {
+    const p = (state.mode === "CUM") ? r.cum : r.mon;
+    const tr = document.createElement("tr");
+    tr.className = "hover:bg-slate-50";
+    tr.innerHTML = `
+      <td class="px-4 py-3 font-medium">${escapeHtml(r.country)}</td>
+      <td class="px-4 py-3">${escapeHtml(r.tierCum)}</td>
+      <td class="px-4 py-3">${escapeHtml(r.tierMon)}</td>
+      <td class="px-4 py-3 text-right font-medium">${r.cum.total.toFixed(1)}%</td>
+      <td class="px-4 py-3 text-right font-medium">${r.mon.total.toFixed(1)}%</td>
+      <td class="px-4 py-3 text-right">${p.brand.toFixed(1)}%</td>
+      <td class="px-4 py-3 text-right">${p.product.toFixed(1)}%</td>
+      <td class="px-4 py-3 text-right">${p.motorsports.toFixed(1)}%</td>
+      <td class="px-4 py-3 text-right">${p.formulae.toFixed(1)}%</td>
+      <td class="px-4 py-3 text-right">${p.info.toFixed(1)}%</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function renderCharts(rows) {
+  renderCountryChart(rows);
+  renderTierChart(rows);
+  renderPillarChart(rows);
+}
+
+function renderCountryChart(rows) {
+  const sorted = [...rows].sort((a,b)=>getTotal(b)-getTotal(a));
+  const labels = sorted.map(d => d.country);
+  const values = sorted.map(d => Number(getTotal(d).toFixed(2)));
+  const barColors = values.map(v => (v <= 10 ? HK.warning : HK.orange));
+
+  const ctx = document.getElementById("countryChart").getContext("2d");
+  if (state.charts.country) state.charts.country.destroy();
+
+  state.charts.country = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Total(%)",
+        data: values,
+        backgroundColor: barColors,
+        borderColor: barColors,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed.y;
+              const warn = v <= 10 ? " ⚠️ (≤10%)" : "";
+              const over30 = v >= 30 ? " (>=30%)" : "";
+              return `Total: ${v.toFixed(1)}%${over30}${warn}`;
+            }
+          }
+        },
+        multiThresholdPlugin: {
+          lines: [
+            { yValue: 30, label: "30% 기준", color: HK.black, dash: [6,6], width: 2 },
+            { yValue: 10, label: "10% 기준", color: HK.warning, dash: [4,4], width: 2 }
+          ]
+        }
+      },
+      
+scales: { 
+        y: { beginAtZero: true, max: 100 },
+        x: {
+          ticks: {
+            color: function(ctx){
+              const value = ctx.tick && ctx.tick.value;
+              const label = ctx.tick && ctx.tick.label;
+              const idx = ctx.index;
+              const chart = ctx.chart;
+              const v = chart.data.datasets[0].data[idx];
+              return v <= 10 ? '#d32f2f' : '#374151';
+            },
+            font: function(ctx){
+              const idx = ctx.index;
+              const chart = ctx.chart;
+              const v = chart.data.datasets[0].data[idx];
+              return v <= 10 ? { weight: 'bold' } : {};
+            }
+          }
+        }
+      }
+
+    }
+  });
+}
+
+function renderTierChart(rows) {
+  const isCum = state.mode === "CUM";
+  const tierField = isCum ? "tierCum" : "tierMon";
+
+  document.getElementById("tierHint").textContent =
+    isCum
+      ? "각 Group에 마우스를 올리면(누적 Group 기준) 포함 국가 + 비중(%)이 표시됩니다."
+      : "각 Group에 마우스를 올리면(월간 Group 기준) 포함 국가 + 비중(%)이 표시됩니다.";
+
+  const tierMap = new Map();
+  for (const r of rows) {
+    const t = (r[tierField] || "N/A");
+    if (!tierMap.has(t)) tierMap.set(t, []);
+    tierMap.get(t).push(r.country);
+  }
+
+  const labels = [...tierMap.keys()].sort();
+  const counts = labels.map(k => tierMap.get(k).length);
+  const total = counts.reduce((a,b)=>a+b,0) || 1;
+  const percents = counts.map(c => (c / total) * 100);
+
+  const palette = [HK.orange, HK.gray, HK.black, HK.lightGray];
+  const bg = labels.map((_, i) => palette[i % palette.length]);
+
+  const ctx = document.getElementById("tierChart").getContext("2d");
+  if (state.charts.tier) state.charts.tier.destroy();
+
+  state.charts.tier = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels,
+      datasets: [{
+        data: counts,
+        backgroundColor: bg,
+        borderColor: HK.white,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: "65%",
+      plugins: {
+        // ✅ 중앙에 붙는 이상한 퍼센트(예: 1.0%) 라벨 제거 (ChartDataLabels가 있을 때만 적용됨)
+        datalabels: { display: false },
+        doughnutCenterClearPlugin: { color: "#ffffff" },
+        legend: {
+          position: "bottom",
+          labels: {
+            generateLabels: (chart) => {
+              const dataset = chart.data.datasets[0];
+              return chart.data.labels.map((lbl, i) => {
+                const c = dataset.data[i] ?? 0;
+                const p = ((c / total) * 100);
+                return {
+                  text: `${lbl} (${c}, ${p.toFixed(1)}%)`,
+                  fillStyle: dataset.backgroundColor[i],
+                  strokeStyle: dataset.borderColor,
+                  lineWidth: dataset.borderWidth,
+                  hidden: isNaN(dataset.data[i]),
+                  index: i
+                };
+              });
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const idx = items?.[0]?.dataIndex ?? 0;
+              const tier = labels[idx] ?? "N/A";
+              return `${isCum ? "누적" : "월간"} Group: ${tier}`;
+            },
+            label: (ctx) => {
+              const c = counts[ctx.dataIndex] ?? 0;
+              const p = percents[ctx.dataIndex] ?? 0;
+              return `Count: ${c} / Share: ${p.toFixed(1)}%`;
+            },
+            afterLabel: (ctx) => {
+              const tier = labels[ctx.dataIndex];
+              const countries = tierMap.get(tier) || [];
+              const header = "Countries:";
+              if (countries.length === 0) return [header, "-"];
+              const lines = [];
+              for (let i=0; i<countries.length; i+=5) lines.push(countries.slice(i,i+5).join(", "));
+              return [header, ...lines];
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderPillarChart(rows) {
+  const keys = ["brand","product","motorsports","formulae","info"];
+  const labelMap = {
+    brand: "Brand",
+    product: "Product",
+    motorsports: "Motorsports",
+    formulae: "Formula E",
+    info: "Info/Entertain"
+  };
+
+  // ✅ Pillar 평균은 '37개국 기준' (검색/필터와 무관) — N/A는 평균에서 제외
+  const avgRow46 = state.raw?.pillarAvgRow46?.[state.mode];
+  const avg37 = state.raw?.pillarAvg37?.[state.mode];
+
+  const labels = keys.map(k => labelMap[k]);
+  let values;
+
+  if (avgRow46) {
+    values = keys.map(k => Number(((avgRow46[k] ?? 0)).toFixed(2)));
+  } else if (avg37) {
+    values = keys.map(k => Number(((avg37[k]?.avg ?? 0)).toFixed(2)));
+  } else {
+    // fallback: 기존 방식(현재 rows 평균)
+    const sums = { brand:0, product:0, motorsports:0, formulae:0, info:0 };
+    const cnts = { brand:0, product:0, motorsports:0, formulae:0, info:0 };
+    for (const r of (rows || [])) {
+      const src = (state.mode === "CUM") ? r.cum : r.mon;
+      for (const k of keys) {
+        const v = src?.[k];
+        if (typeof v === "number" && Number.isFinite(v)) { sums[k] += v; cnts[k] += 1; }
+      }
+    }
+    values = keys.map(k => Number(((cnts[k] ? sums[k]/cnts[k] : 0)).toFixed(2)));
+  }
+
+  const ctx = document.getElementById("pillarChart").getContext("2d");
+  if (state.charts.pillar) state.charts.pillar.destroy();
+
+  state.charts.pillar = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Avg(%)",
+        data: values,
+        backgroundColor: HK.gray,
+        borderColor: HK.gray,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, barValueLabelPlugin: false },
+      
+scales: { 
+        y: { beginAtZero: true, max: 100 },
+        x: {
+          ticks: {
+            color: function(ctx){
+              const value = ctx.tick && ctx.tick.value;
+              const label = ctx.tick && ctx.tick.label;
+              const idx = ctx.index;
+              const chart = ctx.chart;
+              const v = chart.data.datasets[0].data[idx];
+              return v <= 10 ? '#d32f2f' : '#374151';
+            },
+            font: function(ctx){
+              const idx = ctx.index;
+              const chart = ctx.chart;
+              const v = chart.data.datasets[0].data[idx];
+              return v <= 10 ? { weight: 'bold' } : {};
+            }
+          }
+        }
+      }
+
+    }
+  });
+}
+
+/* ✅ URL만: 라벨은 컨텐츠명 */
+function renderContentTop3Chart() {
+  if (state.mode !== "MON") return;
+  const top = state.raw?.topContents || [];
+
+  const labels = top.map(x => shortenLabel(x.name, 28));
+  const values = top.map(x => Number((x.rate ?? 0).toFixed(2)));
+
+  const ctx = document.getElementById("contentTop3Chart").getContext("2d");
+  if (state.charts.content) state.charts.content.destroy();
+
+  state.charts.content = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Utilization(%)",
+        data: values,
+        backgroundColor: HK.orange,
+        borderColor: HK.orange,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      onClick: (evt, elements) => {
+        const idx = elements?.[0]?.index;
+        if (idx === undefined) return;
+        const url = top[idx]?.url;
+        if (url) window.open(url, "_blank", "noopener,noreferrer");
+        else toast({ title:"URL 없음", description:"Ref4에서 URL(J열)을 찾지 못했어요.", variant:"destructive" });
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const idx = items?.[0]?.dataIndex ?? 0;
+              return top[idx]?.name || "(no name)";
+            },
+            label: (ctx) => {
+              const idx = ctx.dataIndex;
+              const v = ctx.parsed.y;
+              const urlOk = !!top[idx]?.url;
+              return `사용률: ${v.toFixed(1)}% · URL: ${urlOk ? "OK(클릭하면 열림)" : "없음"}`;
+            }
+          }
+        },
+        barValueLabelPlugin: { color: "rgba(0,0,0,0.85)" }
+      },
+      scales: {
+        x: { ticks: { maxRotation: 45, minRotation: 0 } },
+        y: { beginAtZero: true, max: 100 }
+      }
+    }
+  });
+}
+
+/* =======================
+   Summary (Contents는 월간에서만)
+======================= */
+function topKByTotal(mode, k=3) {
+  const src = state.raw?.countries || [];
+  const arr = [...src].sort((a,b) => {
+    const ta = (mode === "CUM") ? a.cum.total : a.mon.total;
+    const tb = (mode === "CUM") ? b.cum.total : b.mon.total;
+    return tb - ta;
+  });
+  return arr.slice(0, k).map(x => ({ country: x.country, pct: (mode === "CUM") ? x.cum.total : x.mon.total }));
+}
+function groupByPct(mode) {
+  const src = state.raw?.countries || [];
+  const map = new Map();
+  for (const d of src) {
+    const pct = (mode === "CUM") ? d.cum.total : d.mon.total;
+    const key = Number(pct.toFixed(1));
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(d.country);
+  }
+  return [...map.entries()].sort((a,b)=>b[0]-a[0]);
+}
+function top3Pillars(mode) {
+  const keys = ["product","info","brand","motorsports","formulae"];
+  const labelMap = {
+    brand: "브랜딩 컨텐츠",
+    product: "제품 컨텐츠",
+    motorsports: "모터스포츠 컨텐츠",
+    formulae: "Formula E 컨텐츠",
+    info: "정보성/엔터테인먼트 컨텐츠"
+  };
+
+  // ✅ Pillar는 37개국 평균(모드별) 기준 — N/A 제외
+  const avgRow46 = state.raw?.pillarAvgRow46?.[mode];
+  const avg37 = state.raw?.pillarAvg37?.[mode];
+  if (avgRow46) {
+    const avgs = keys.map(k => ({ key:k, label: labelMap[k], pct: (avgRow46[k] ?? 0) }));
+    avgs.sort((a,b)=>b.pct-a.pct);
+    return avgs.slice(0,3);
+  }
+  if (avg37) {
+    const avgs = keys.map(k => ({ key:k, label: labelMap[k], pct: (avg37[k]?.avg ?? 0) }));
+    avgs.sort((a,b)=>b.pct-a.pct);
+    return avgs.slice(0,3);
+  }
+
+  // fallback (현재 raw.countries 평균)
+  const rows = state.raw?.countries || [];
+  const sums = {}; const cnts = {};
+  for (const k of keys) { sums[k]=0; cnts[k]=0; }
+
+  for (const r of rows) {
+    const src = (mode === "CUM") ? r.cum : r.mon;
+    for (const k of keys) {
+      const v = src?.[k];
+      if (typeof v === "number" && Number.isFinite(v)) { sums[k]+=v; cnts[k]+=1; }
+    }
+  }
+  const avgs = keys.map(k => ({ key:k, label: labelMap[k], pct: cnts[k] ? (sums[k]/cnts[k]) : 0 }));
+  avgs.sort((a,b)=>b.pct-a.pct);
+  return avgs.slice(0,3);
+}
+function renderWarningList() {
+  const box = document.getElementById("warningBox");
+  const list = document.getElementById("warningList");
+  const badgeEl = document.getElementById("warningModeBadge");
+  const note = document.getElementById("warningNote");
+
+  // 요소가 없거나 아직 데이터가 없으면 종료
+  if (!box || !list || !badgeEl || !note || !state.raw) return;
+
+  const modeKorean = state.mode === "CUM" ? "누적" : "월간";
+  badgeEl.textContent = `현재 모드: ${modeKorean}`;
+
+  const rows = state.raw.countries || [];
+  const warnings = rows
+    .map(r => ({ country: r.country, pct: getTotal(r) }))
+    .filter(x => (Number(x.pct) < 10))
+    .sort((a,b)=>a.pct - b.pct);
+
+  // ✅ 항상 박스 노출 (데이터가 있으면 '없음'도 보여줌)
+  box.classList.remove("hidden");
+
+  if (!warnings.length) {
+    list.innerHTML = `<span class="text-sm font-medium text-red-700">없음 🎉 (10% 미만 국가가 없습니다)</span>`;
+    note.textContent = "";
+    return;
+  }
+
+  list.innerHTML = warnings.map(w => warningChip(w.country, w.pct)).join("");
+  const lowest = warnings[0];
+  note.textContent = `총 ${warnings.length}개 국가가 10% 미만입니다. (최저: ${lowest.country} ${Number(lowest.pct).toFixed(1)}%)`;
+}
+
+function renderSummary() {
+  if (!state.raw) return;
+
+  const cells = state.raw.summaryCells || {};
+  const ghqCumContents = Number(cells.ghqCumContents ?? 0);
+  const ghqMonContents = Number(cells.ghqMonContents ?? 0);
+  const cumUsed = Number(cells.cumUsed ?? 0);
+  const cumAvail = Number(cells.cumAvail ?? 0);
+  const monUsed = Number(cells.monUsed ?? 0);
+  const monAvail = Number(cells.monAvail ?? 0);
+
+  const cumRate = (cumAvail > 0) ? (cumUsed / cumAvail * 100) : 0;
+  const monRate = (monAvail > 0) ? (monUsed / monAvail * 100) : 0;
+
+  const topCum = topKByTotal("CUM", 3);
+  const cumTopLines = [
+    `Top1: ${topCum[0]?.country ?? "-"} (${fmtPct(topCum[0]?.pct ?? 0)})`,
+    `Top2: ${topCum[1]?.country ?? "-"} (${fmtPct(topCum[1]?.pct ?? 0)})`,
+    `Top3: ${topCum[2]?.country ?? "-"} (${fmtPct(topCum[2]?.pct ?? 0)})`,
+  ].join("\n");
+
+  const groupsMon = groupByPct("MON").filter(([pct]) => pct > 0);
+  const top3Groups = groupsMon.slice(0, 3).map(([pct, countries]) => ({ pct, countries }));
+  const monTopLines = [
+    `Top1: ${(top3Groups[0]?.countries || ["-"]).join(", ")} (${fmtPct(top3Groups[0]?.pct ?? 0)})`,
+    `Top2: ${(top3Groups[1]?.countries || ["-"]).join(", ")} (${fmtPct(top3Groups[1]?.pct ?? 0)})`,
+    `Top3: ${(top3Groups[2]?.countries || ["-"]).join(", ")} (${fmtPct(top3Groups[2]?.pct ?? 0)})`,
+  ].join("\n");
+
+  const pillars = top3Pillars(state.mode);
+  const pillarTopLine =
+    `Top1: ${pillars[0]?.label ?? "-"} (${fmtPct(pillars[0]?.pct ?? 0)})\n` +
+    `Top2: ${pillars[1]?.label ?? "-"} (${fmtPct(pillars[1]?.pct ?? 0)})\n` +
+    `Top3: ${pillars[2]?.label ?? "-"} (${fmtPct(pillars[2]?.pct ?? 0)})`;
+
+  const modeKorean = state.mode === "CUM" ? "누적" : "월간";
+  const warningCount = (state.raw?.countries || []).filter(r => getTotal(r) < 10).length;
+  const oneLine = `누적 ${fmtPct(cumRate)} · 월간 ${fmtPct(monRate)} · (Pillar 기준: ${modeKorean}) · 10% 미만 ${warningCount}개`;
+  const oneLineEl = document.getElementById("summaryOneLine");
+  if (oneLineEl) oneLineEl.textContent = oneLine;
+
+  document.getElementById("summaryModeBadge").textContent = `Pillar 기준: ${modeKorean}`;
+
+  const contents = state.raw.topContents || [];
+  const contentLinesText = contents.map((c, i) =>
+    `Top${i+1}: ${c.name} (${fmtPct(c.rate)})${c.url ? " [URL]" : " [URL 없음]"}`
+  ).join("\n");
+
+  const contentsBlockText = (state.mode === "MON")
+    ? `\n\n[Contents]\n- 컨텐츠 활용률 Top3\n${contentLinesText}`
+    : "";
+
+  const summaryText =
+`[Overall]
+- GHQ 배포 ${fmtInt(ghqCumContents)}개 컨텐츠의 법인 누적 활용률: ${fmtPct(cumRate)} (ref. ${fmtInt(cumUsed)} / ${fmtInt(cumAvail)} = ${fmtPct(cumRate)})
+- GHQ 배포 ${fmtInt(ghqMonContents)}개 컨텐츠의 법인 월간 활용률: ${fmtPct(monRate)} (ref. ${fmtInt(monUsed)} / ${fmtInt(monAvail)} = ${fmtPct(monRate)})
+
+[Country]
+- 누적 Top3
+${cumTopLines}
+- 월간 Top3
+${monTopLines}
+
+[Pillar] (현재 모드: ${modeKorean})
+- Top3
+${pillarTopLine}${contentsBlockText}`;
+
+  document.getElementById("summaryText").textContent = summaryText;
+
+  let contentsPrettyHtml = "";
+  if (state.mode === "MON") {
+    contentsPrettyHtml = contents.map((c, i) => {
+      const url = safeUrl(c.url);
+      const titleHtml = url
+        ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
+             class="font-semibold text-slate-900 underline decoration-slate-300 hover:decoration-slate-900">
+             ${escapeHtml(c.name)}
+           </a>`
+        : `<span class="font-semibold text-slate-900">${escapeHtml(c.name)}</span>`;
+
+      return `
+        <div class="rounded-xl border bg-slate-50 p-3">
+          <div class="text-xs font-medium text-slate-600 mb-2">Top${i+1}</div>
+          <div class="text-sm leading-snug">${titleHtml}</div>
+          <div class="mt-2 text-xs text-slate-600">
+            <span class="text-slate-500">사용률</span> <span class="font-semibold">${fmtPct(c.rate)}</span>
+            <span class="mx-1">·</span>
+            <span class="text-slate-500">URL</span> <span class="font-medium ${url ? "text-emerald-700" : "text-red-700"}">${url ? "매칭" : "없음"}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  const contentsPrettySection = (state.mode === "MON")
+    ? `
+      <div class="rounded-2xl border bg-white p-4">
+        <div class="flex items-center justify-between">
+          <div class="text-sm font-semibold">4) Contents</div>
+          <div class="text-xs text-slate-500">월간 모드 전용</div>
+        </div>
+        <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+          ${contentsPrettyHtml || `<div class="text-sm text-slate-600">Top3 컨텐츠를 찾지 못했습니다.</div>`}
+        </div>
+      </div>
+    `
+    : "";
+
+  document.getElementById("summaryPretty").innerHTML = `
+    <div class="rounded-2xl border bg-white p-4">
+      <div class="flex items-center justify-between gap-2">
+        <div class="text-sm font-semibold">1) Overall</div>
+        <div class="flex flex-wrap gap-2">
+          ${badge(`누적 ${fmtPct(cumRate)}`)}
+          ${badge(`월간 ${fmtPct(monRate)}`)}
+        </div>
+      </div>
+      <div class="mt-3 text-sm text-slate-700 leading-relaxed space-y-2">
+        <div>
+          <span class="font-medium">• 누적</span> : GHQ 배포 <span class="font-semibold">${fmtInt(ghqCumContents)}</span>개 컨텐츠의 법인 누적 활용률
+          <span class="font-semibold">${fmtPct(cumRate)}</span>
+          <span class="text-xs text-slate-500">(ref. ${fmtInt(cumUsed)} / ${fmtInt(cumAvail)})</span>
+        </div>
+        <div>
+          <span class="font-medium">• 월간</span> : GHQ 배포 <span class="font-semibold">${fmtInt(ghqMonContents)}</span>개 컨텐츠의 법인 월간 활용률
+          <span class="font-semibold">${fmtPct(monRate)}</span>
+          <span class="text-xs text-slate-500">(ref. ${fmtInt(monUsed)} / ${fmtInt(monAvail)})</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rounded-2xl border bg-white p-4">
+      <div class="text-sm font-semibold">2) Country</div>
+      <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="rounded-xl border bg-slate-50 p-3">
+          <div class="text-xs font-medium text-slate-600 mb-2">누적 Top3</div>
+          <pre class="whitespace-pre-wrap text-sm text-slate-800 leading-relaxed">${escapeHtml(cumTopLines)}</pre>
+        </div>
+        <div class="rounded-xl border bg-slate-50 p-3">
+          <div class="text-xs font-medium text-slate-600 mb-2">월간 Top3</div>
+          <pre class="whitespace-pre-wrap text-sm text-slate-800 leading-relaxed">${escapeHtml(monTopLines)}</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="rounded-2xl border bg-white p-4">
+      <div class="flex items-center justify-between">
+        <div class="text-sm font-semibold">3) Pillar</div>
+        <div class="text-xs text-slate-500">현재 모드: ${modeKorean}</div>
+      </div>
+      <div class="mt-3 rounded-xl border bg-slate-50 p-3">
+        <div class="text-xs font-medium text-slate-600 mb-2">Top3</div>
+        <pre class="whitespace-pre-wrap text-sm text-slate-800 leading-relaxed">${escapeHtml(pillarTopLine)}</pre>
+      </div>
+    </div>
+
+    ${contentsPrettySection}
+  `;
+
+  document.getElementById("summaryMetrics").innerHTML = `
+    <div class="grid grid-cols-1 gap-2">
+      <div class="rounded-lg border bg-slate-50 p-2">
+        <div class="text-xs text-slate-500">누적 활용률 (K46/AB46)</div>
+        <div class="font-semibold">${fmtInt(cumUsed)} / ${fmtInt(cumAvail)} = ${fmtPct(cumRate)}</div>
+      </div>
+      <div class="rounded-lg border bg-slate-50 p-2">
+        <div class="text-xs text-slate-500">월간 활용률 (Q46/AJ3)</div>
+        <div class="font-semibold">${fmtInt(monUsed)} / ${fmtInt(monAvail)} = ${fmtPct(monRate)}</div>
+      </div>
+    </div>
+  `;
+
+  // ✅ Pillar metrics (row46 values)
+  const p46 = state.raw?.pillarAvgRow46 || {};
+  const fmtP = (x) => (typeof x === "number" && Number.isFinite(x)) ? `${x.toFixed(1)}%` : "-";
+  const cur = p46[state.mode] || {};
+  const cumP = p46.CUM || {};
+  const monP = p46.MON || {};
+
+  const pillarEl = document.getElementById("pillarMetrics");
+  if (pillarEl) {
+    pillarEl.innerHTML = `
+      <div class="grid grid-cols-1 gap-2">
+        <div class="rounded-lg border bg-white p-2">
+          <div class="text-xs text-slate-500">현재 모드(${modeKorean})</div>
+          <div class="mt-1 text-sm font-semibold text-slate-800">
+            Brand ${fmtP(cur.brand)} · Product ${fmtP(cur.product)} · Motorsports ${fmtP(cur.motorsports)} · Formula E ${fmtP(cur.formulae)} · Info ${fmtP(cur.info)}
+          </div>
+        </div>
+        <div class="rounded-lg border bg-white p-2">
+          <div class="text-xs text-slate-500">누적(AC46~AG46)</div>
+          <div class="mt-1 text-sm text-slate-800">
+            Brand ${fmtP(cumP.brand)} · Product ${fmtP(cumP.product)} · Motorsports ${fmtP(cumP.motorsports)} · Formula E ${fmtP(cumP.formulae)} · Info ${fmtP(cumP.info)}
+          </div>
+        </div>
+        <div class="rounded-lg border bg-white p-2">
+          <div class="text-xs text-slate-500">월간(AI46~AM46)</div>
+          <div class="mt-1 text-sm text-slate-800">
+            Brand ${fmtP(monP.brand)} · Product ${fmtP(monP.product)} · Motorsports ${fmtP(monP.motorsports)} · Formula E ${fmtP(monP.formulae)} · Info ${fmtP(monP.info)}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  renderWarningList();
+
+
+  // 리포트 뷰 업데이트
+  renderReport();
+}
+
+function renderDebug() {
+  const box = document.getElementById("debugBox");
+  if (!state.raw) { box.textContent = ""; return; }
+
+  const missing = state.raw.missing || [];
+  const topC = (state.raw.topContents || []).map((c, i) =>
+`Top${i+1}: ${c.name}
+- rate=${(c.rate ?? 0).toFixed(1)}%
+- ref4Row1=${c.ref4Row1 ?? "(null)"}
+- url=${c.url || "(null)"}`).join("\n\n");
+
+  box.textContent =
+`Ref1: ${state.raw.sheetName}
+Ref4: ${state.raw.ref4Name || "(not found)"}
+month: ${state.raw.month}
+matched: ${state.raw.countries.length}/${TARGET_COUNTRIES.length}
+missing:
+${missing.length ? "- " + missing.join("\n- ") : "(none)"}
+
+Top Contents match:
+${topC || "(none)"}
+`;
+}
+
+
+
+async function downloadReportAsImage() {
+  const el = document.getElementById("reportContent");
+  if (!el) { toast({ title:"다운로드 실패", description:"리포트 영역을 찾지 못했습니다." }); return; }
+  if (typeof html2canvas === "undefined") { toast({ title:"다운로드 실패", description:"html2canvas 로드에 실패했습니다." }); return; }
+
+  // 스크롤 위치/레이아웃 흔들림 최소화
+  const prevScrollY = window.scrollY;
+  const prevOverflow = document.documentElement.style.overflow;
+  document.documentElement.style.overflow = "hidden";
+  window.scrollTo(0, 0);
+
+  try {
+    toast({ title:"이미지 생성 중…", description:"리포트 전체를 캡처하고 있어요." });
+
+    const canvas = await html2canvas(el, {
+      backgroundColor: "#ffffff",
+      scale: Math.max(2, (window.devicePixelRatio || 1)),
+      useCORS: true,
+      allowTaint: true,
+      scrollY: 0,
+      windowWidth: document.documentElement.clientWidth,
+    });
+
+    const dataUrl = canvas.toDataURL("image/png");
+    const a = document.createElement("a");
+    const month = state.raw?.month || "report";
+    a.download = `HKT_Report_${month}.png`;
+    a.href = dataUrl;
+    a.click();
+
+    toast({ title:"다운로드 완료", description:"PNG 이미지로 저장했습니다." });
+  } catch (e) {
+    console.error(e);
+    toast({ title:"다운로드 실패", description: e?.message || "이미지 생성 중 오류가 발생했습니다.", variant:"destructive" });
+  } finally {
+    document.documentElement.style.overflow = prevOverflow;
+    window.scrollTo(0, prevScrollY);
+  }
+}
+
+/* =======================
+   CSV + reset + file handler
+======================= */
+function downloadCsv(rows) {
+  const headers = [
+    "country","tier_cum","tier_mon",
+    "total_cum","total_mon",
+    "brand_cum","product_cum","motorsports_cum","formulae_cum","info_cum",
+    "brand_mon","product_mon","motorsports_mon","formulae_mon","info_mon"
+  ];
+  const lines = [headers.join(",")];
+  for (const r of rows) {
+    const line = [
+      q(r.country), q(r.tierCum), q(r.tierMon),
+      r.cum.total.toFixed(2), r.mon.total.toFixed(2),
+      r.cum.brand.toFixed(2), r.cum.product.toFixed(2), r.cum.motorsports.toFixed(2),
+      r.cum.formulae.toFixed(2), r.cum.info.toFixed(2),
+      r.mon.brand.toFixed(2), r.mon.product.toFixed(2), r.mon.motorsports.toFixed(2),
+      r.mon.formulae.toFixed(2), r.mon.info.toFixed(2)
+    ].join(",");
+    lines.push(line);
+  }
+  const blob = new Blob([lines.join("\n")], { type:"text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `utilization_${(state.raw?.month || "unknown")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  function q(x){ return `"${String(x ?? "").replaceAll('"','""')}"`; }
+}
+
+function resetAll() {
+  for (const k of Object.keys(state.charts)) {
+    if (state.charts[k]) state.charts[k].destroy();
+    state.charts[k] = null;
+  }
+  state.raw = null;
+  state.filtered = [];
+  state.mode = "MON";
+
+  document.getElementById("dashboardView").classList.add("hidden");
+  document.getElementById("uploadView").classList.remove("hidden");
+
+  document.getElementById("monthBadge").classList.add("hidden");
+
+  document.getElementById("searchInput").value = "";
+  document.getElementById("debugBox").textContent = "";
+  document.getElementById("summaryText").textContent = "";
+  document.getElementById("summaryMetrics").innerHTML = "";
+  document.getElementById("summaryPretty").innerHTML = "";
+  document.getElementById("summaryModeBadge").textContent = "";
+
+  document.getElementById("warningBox").classList.add("hidden");
+  document.getElementById("warningList").innerHTML = "";
+  document.getElementById("warningNote").textContent = "";
+
+  document.getElementById("contentsSection").classList.add("hidden");
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  setLoading(true);
+  try {
+    const parsed = await parseUtilizationExcel(file);
+    if (!parsed.countries || parsed.countries.length === 0) {
+      toast({ title:"파싱 실패", description:"17개국을 시트에서 찾지 못했습니다.", variant:"destructive" });
+      return;
+    }
+    state.raw = parsed;
+
+    const contents = parsed.topContents || [];
+    const matchedUrls = contents.filter(x => x.url).length;
+
+    toast({
+      title:"분석 완료",
+      description:`국가 ${parsed.countries.length}/${TARGET_COUNTRIES.length}개 · Contents(URL ${matchedUrls}/3)`
+    });
+
+    showDashboard(parsed);
+  } catch (e) {
+    toast({ title:"오류", description: e?.message || "엑셀 분석 중 오류", variant:"destructive" });
+  } finally {
+    setLoading(false);
+  }
+}
+
+/* =======================
+   Events (safe init)
+======================= */
+function safeOn(id, evt, handler) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener(evt, handler);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  safeOn("fileInput", "change", (e) => { handleFile(e.target.files?.[0]); e.target.value=""; });
+
+  const filePickBtn = document.getElementById("filePickBtn");
+  const fileInputSmall = document.getElementById("fileInputSmall");
+  if (filePickBtn && fileInputSmall) filePickBtn.addEventListener("click", () => fileInputSmall.click());
+
+  safeOn("fileInputSmall", "change", (e) => {
+    const f = e.target.files?.[0];
+    const label = document.getElementById("fileNameLabel");
+    if (label) label.textContent = f ? f.name : "선택된 파일 없음";
+    handleFile(f);
+    e.target.value = "";
+  });
+
+  safeOn("searchInput", "input", () => { applyFilters(); renderSummary(); });
+
+  safeOn("modeCumBtn", "click", () => setMode("CUM"));
+  safeOn("modeMonBtn", "click", () => setMode("MON"));
+
+  // View toggle (Dashboard / Report)
+  safeOn("viewDashBtn", "click", () => setView("DASH"));
+  safeOn("viewReportBtn", "click", () => {
+    if (!state.raw) { toast({ title:"파일 업로드 필요", description:"먼저 엑셀 파일을 업로드해 주세요." }); return; }
+    setView("REPORT");
+    renderReport();
+  });
+
+  safeOn("copyReportBtn", "click", async () => {
+    const text = document.getElementById("reportText")?.textContent || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title:"복사 완료", description:"리포트를 클립보드에 복사했어요." });
+    } catch {
+      console.warn("Clipboard write failed");
+      toast({ title:"복사 실패", description:"브라우저 권한 설정을 확인해 주세요." });
+    }
+  });
+
+  safeOn("downloadReportImgBtn", "click", () => {
+    if (!state.raw) { toast({ title:"파일 업로드 필요", description:"먼저 엑셀 파일을 업로드해 주세요." }); return; }
+    setView("REPORT");
+    // 캡처 직전 한 번 더 렌더 보장
+    renderReport();
+    // Chart 렌더 타이밍 여유
+    setTimeout(downloadReportAsImage, 50);
+  });
+
+
+
+  safeOn("downloadCsvBtn", "click", () => downloadCsv(state.filtered || []));
+  safeOn("resetBtn", "click", resetAll);
+
+  // Summary toggle
+  safeOn("toggleSummaryBtn", "click", () => {
+    const body = document.getElementById("summaryBody");
+    const btn = document.getElementById("toggleSummaryBtn");
+    if (!body || !btn) return;
+    const isHidden = body.classList.toggle("hidden");
+    btn.textContent = isHidden ? "요약 펼치기" : "요약 접기";
+  });
+
+  // Ensure correct default label on load
+  const body = document.getElementById("summaryBody");
+  const btn = document.getElementById("toggleSummaryBtn");
+  if (body && btn) btn.textContent = body.classList.contains("hidden") ? "요약 펼치기" : "요약 접기";
+
+  safeOn("copySummaryBtn", "click", async () => {
+    const text = document.getElementById("summaryText")?.textContent || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title:"복사 완료", description:"요약을 클립보드에 복사했어요." });
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      toast({ title:"복사 완료", description:"요약을 복사했어요." });
+    }
+  });
+});
+</script>
+
+<script>
+const reportCountryMap = {
+  "Germany": "독일",
+  "UK": "영국",
+  "Hungary": "헝가리",
+  "China": "중국",
+  "USA": "미국",
+  "Mexico": "멕시코",
+  "Colombia": "콜롬비아",
+  "Sao Paulo, Brasil": "브라질",
+  "Peru": "페루",
+  "Argentina": "아르헨티나",
+  "Indonesia": "인도네시아",
+  "Australia": "호주",
+  "Malaysia": "말레이시아",
+  "Thailand": "태국",
+  "Vietnam": "베트남",
+  "Taiwan": "대만",
+  "Jeddah": "사우디"
+};
+
+function convertReportCountries() {
+  const reportSection = document.querySelector(".report-summary");
+  if (!reportSection) return;
+
+  let htmlContent = reportSection.innerHTML;
+
+  Object.keys(reportCountryMap).forEach(en => {
+    const escaped = en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, "g");
+    htmlContent = htmlContent.replace(regex, reportCountryMap[en]);
+  });
+
+  reportSection.innerHTML = htmlContent;
+}
+
+window.addEventListener("load", () => {
+  setTimeout(convertReportCountries, 300);
+});
+</script>
+
+</body>
+</html>
