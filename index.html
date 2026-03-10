@@ -80,6 +80,9 @@ html, body, .font-sans, * {
 <style>
 /* Report Ref2 HQ vs Local chart size */
 #reportRef2HqLocalStackChart{max-height:320px !important;}
+
+/* Report 3-month trend */
+#reportRecent3MonthUtilChart{max-height:280px !important;}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
@@ -248,25 +251,32 @@ html, body, .font-sans, * {
 
         <div class="bg-white border rounded-2xl shadow-sm p-4">
           <div class="flex items-center justify-between gap-2 mb-2">
-            <h3 class="text-sm font-semibold">Warning List (월간)</h3>
+            <h3 class="text-sm font-semibold">Warning List (최근 3개월)</h3>
             <span class="text-xs text-slate-500">10% 미만</span>
           </div>
-          <div id="reportWarningMonList" class="text-sm text-slate-700 space-y-1"></div>
+          <div id="reportWarningRecent3mList" class="text-sm text-slate-700 space-y-1"></div>
         </div>
       </div>
 
       <!-- Report charts -->
       <div class="mt-4 space-y-4" id="reportChartsWrap">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
           <div class="bg-white border rounded-2xl shadow-sm p-4">
             <h3 class="text-sm font-semibold mb-2">누적 활용률 그래프</h3>
             <p class="text-[11px] text-slate-500 mb-2">국가별 Total(누적) 기준</p>
             <canvas id="reportCumUtilChart" height="140"></canvas>
           </div>
-          <div class="bg-white border rounded-2xl shadow-sm p-4">
-            <h3 class="text-sm font-semibold mb-2">월간 활용률 그래프</h3>
-            <p class="text-[11px] text-slate-500 mb-2">국가별 Total(월간) 기준</p>
-            <canvas id="reportMonUtilChart" height="140"></canvas>
+          <div class="space-y-4">
+            <div class="bg-white border rounded-2xl shadow-sm p-4">
+              <h3 class="text-sm font-semibold mb-2">월간 활용률 그래프</h3>
+              <p class="text-[11px] text-slate-500 mb-2">국가별 Total(월간) 기준</p>
+              <canvas id="reportMonUtilChart" height="140"></canvas>
+            </div>
+            <div class="bg-white border rounded-2xl shadow-sm p-4">
+              <h3 class="text-sm font-semibold mb-2">최근 3개월 활용률 그래프</h3>
+              <p class="text-[11px] text-slate-500 mb-2">국가별 Total(최근 3개월) 기준 · Ref1 AQ9~AQ45</p>
+              <canvas id="reportRecent3MonthUtilChart" height="140"></canvas>
+            </div>
           </div>
         </div>
 
@@ -1079,7 +1089,11 @@ async function parseUtilizationExcel(file) {
       total:       toPct(getCellValue(ws1, r, "AN")),
     };
 
-    countries.push({ country: tc, tierCum, tierMon, cum, mon, _rowIndex0: r, _rowIndex1: r+1 });
+    const recent3m = {
+      total:       toPct(getCellValue(ws1, r, "AQ")),
+    };
+
+    countries.push({ country: tc, tierCum, tierMon, cum, mon, recent3m, _rowIndex0: r, _rowIndex1: r+1 });
   }
 
   // Summary cells (0-based row index in SheetJS)
@@ -1089,7 +1103,11 @@ async function parseUtilizationExcel(file) {
     cumUsed:        getCellValue(ws1, 45, "K"),  // K46
     cumAvail:       getCellValue(ws1, 45, "AB"), // AB46
     monUsed:        getCellValue(ws1, 45, "Q"),  // Q46
-    monAvail:       getCellValue(ws1, 2,  "AJ")  // AJ3
+    monAvail:       getCellValue(ws1, 2,  "AJ"), // AJ3
+    recent3mUsed:   getCellValue(ws1, 45, "AP"), // AP46
+    recent3mRate:   getCellValue(ws1, 45, "AQ"), // AQ46
+    recent3mAvail:  getCellValue(ws1, 3, "AR"), // AR4
+    ghqRecent3mContents: getCellValue(ws1, 3, "AQ") // AQ4
   };
 
   // ✅ Pillar 평균값 (시트에 이미 계산된 값 사용)
@@ -1449,6 +1467,35 @@ async function parseUtilizationExcel(file) {
   const wsReport = reportSheetName ? wb.Sheets[reportSheetName] : null;
   const reportUtilTable = wsReport ? extractRangeMatrix(wsReport, "B17", "N20") : null;
 
+  const reportRecent3MonthTrend = (() => {
+    if (!wsReport) return [];
+    const out = [];
+    for (let c = XLSX.utils.decode_col("C"); c <= XLSX.utils.decode_col("N"); c++) {
+      const periodCell = getCellObj(wsReport, 16, XLSX.utils.encode_col(c));
+      const issuedCell = getCellObj(wsReport, 18, XLSX.utils.encode_col(c));
+      const rateCell = getCellObj(wsReport, 19, XLSX.utils.encode_col(c));
+
+      const periodLabel = String(periodCell?.w ?? periodCell?.v ?? "").trim();
+      const issuedRaw = issuedCell?.v;
+      const rateRaw = rateCell?.v;
+
+      if (!periodLabel) continue;
+      const hasIssued = issuedRaw !== null && issuedRaw !== undefined && issuedRaw !== "";
+      const hasRate = rateRaw !== null && rateRaw !== undefined && rateRaw !== "";
+      if (!hasIssued && !hasRate) continue;
+
+      const issued = Number(issuedRaw ?? 0);
+      const rate = toPct(rateRaw ?? 0);
+
+      out.push({
+        period: periodLabel,
+        issued: Number.isFinite(issued) ? issued : 0,
+        rate: Number.isFinite(rate) ? rate : 0
+      });
+    }
+    return out.slice(-3);
+  })();
+
 
   return {
     month: guessMonth(file.name, ref1Name),
@@ -1481,7 +1528,7 @@ const state = {
   mode: "MON",
   view: "DASH", // DASH | REPORT
   filtered: [],
-  charts: { country: null, tier: null, pillar: null, content: null, reportCum: null, reportMon: null, reportPillar: null, reportContent: null, reportRef2Pillar: null, reportRef2HqLocal: null, reportRef2Ratio: null }
+  charts: { country: null, tier: null, pillar: null, content: null, reportCum: null, reportMon: null, reportRecent3MonthUtil: null, reportPillar: null, reportContent: null, reportRef2Pillar: null, reportRef2HqLocal: null, reportRef2Ratio: null }
 };
 
 function setMode(mode, silent=false) {
@@ -1632,9 +1679,15 @@ function buildReportText() {
   const cumAvail = Number(cells.cumAvail ?? 0);
   const monUsed = Number(cells.monUsed ?? 0);
   const monAvail = Number(cells.monAvail ?? 0);
+  const recent3mUsed = Number(cells.recent3mUsed ?? 0);
+  const recent3mAvail = Number(cells.recent3mAvail ?? 0);
+  const ghqRecent3mContents = Number(cells.ghqRecent3mContents ?? 0);
 
   const cumRate = (cumAvail > 0) ? (cumUsed / cumAvail * 100) : 0;
   const monRate = (monAvail > 0) ? (monUsed / monAvail * 100) : 0;
+  const recent3mRate = (recent3mAvail > 0)
+    ? (recent3mUsed / recent3mAvail * 100)
+    : toPct(cells.recent3mRate ?? 0);
 
   const topCum = topKByTotal("CUM", 3);
   const groupsMon = groupByPct("MON").filter(([pct]) => pct > 0);
@@ -1691,6 +1744,7 @@ function buildReportText() {
   const lines = [
     `GHQ에서 배포한 ${fmtInt(ghqCumContents)}개 컨텐츠의 법인 누적 활용률은 ${fmtPct(cumRate)}를 기록하였습니다. (ref. 법인활용 컨텐츠 수 / 법인 활용가능 컨텐츠 수 = ${fmtInt(cumUsed)} / ${fmtInt(cumAvail)} = ${fmtPct(cumRate)})`,
     `GHQ에서 배포한 ${fmtInt(ghqMonContents)}개 컨텐츠의 법인 월간 활용률은 ${fmtPct(monRate)}를 기록하였습니다. (ref. 월간 법인활용 컨텐츠 수 / 월간 법인 활용가능 컨텐츠 수 = ${fmtInt(monUsed)} / ${fmtInt(monAvail)} = ${fmtPct(monRate)})`,
+    `GHQ에서 배포한 ${fmtInt(ghqRecent3mContents)}개 컨텐츠의 법인 최근 3개월 활용률은 ${fmtPct(recent3mRate)}를 기록하였습니다. (ref. 3개월 활용 컨텐츠 수 / 3개월 활용가능 컨텐츠 수 = ${fmtInt(recent3mUsed)} / ${fmtInt(recent3mAvail)} = ${fmtPct(recent3mRate)})`,
 topCumSentence,
     topMonSentence,
     pillarSentence,
@@ -1760,7 +1814,10 @@ function renderReportWarnings() {
     const el = document.getElementById(elId);
     if (!el) return;
     const warnings = rows
-      .map(r => ({ country: r.country, pct: Number(getTotalMode(r, mode) || 0) }))
+      .map(r => ({
+        country: r.country,
+        pct: Number(mode === "RECENT3M" ? (r.recent3m?.total ?? 0) : (getTotalMode(r, mode) || 0))
+      }))
       .filter(x => x.pct < 10)
       .sort((a,b) => a.pct - b.pct);
 
@@ -1778,7 +1835,7 @@ function renderReportWarnings() {
   };
 
   fill("CUM", "reportWarningCumList");
-  fill("MON", "reportWarningMonList");
+  fill("RECENT3M", "reportWarningRecent3mList");
 }
 
 function renderReportCharts() {
@@ -1789,6 +1846,7 @@ function renderReportCharts() {
   if (state.charts.reportMon) { state.charts.reportMon.destroy(); state.charts.reportMon = null; }
   if (state.charts.reportPillar) { state.charts.reportPillar.destroy(); state.charts.reportPillar = null; }
   if (state.charts.reportContent) { state.charts.reportContent.destroy(); state.charts.reportContent = null; }
+  if (state.charts.reportRecent3MonthUtil) { state.charts.reportRecent3MonthUtil.destroy(); state.charts.reportRecent3MonthUtil = null; }
   if (state.charts.reportRef2Pillar) { state.charts.reportRef2Pillar.destroy(); state.charts.reportRef2Pillar = null; }
   if (state.charts.reportRef2HqLocal) { state.charts.reportRef2HqLocal.destroy(); state.charts.reportRef2HqLocal = null; }
   if (state.charts.reportRef2Ratio) { state.charts.reportRef2Ratio.destroy(); state.charts.reportRef2Ratio = null; }
@@ -1853,7 +1911,39 @@ function renderReportCharts() {
     });
   }
 
-  // 3) Pillar 누적 그래프 (시트 평균값 우선)
+  // 3) 최근 3개월 활용률 그래프
+  const recent3mCanvas = document.getElementById("reportRecent3MonthUtilChart");
+  if (recent3mCanvas) {
+    const ctx = recent3mCanvas.getContext("2d");
+    const sortedByRecent3m = [...rows]
+      .filter(d => Number.isFinite(d.recent3m?.total))
+      .sort((a, b) => (b.recent3m?.total ?? 0) - (a.recent3m?.total ?? 0));
+
+    const labels = sortedByRecent3m.map(d => countryKo(d.country));
+    const values = sortedByRecent3m.map(d => Number(((d.recent3m?.total ?? 0)).toFixed(2)));
+    const barColors = values.map(v => (v <= 10 ? HK.warning : HK.orange));
+
+    state.charts.reportRecent3MonthUtil = new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets: [{ label: "Total(%)", data: values, backgroundColor: barColors, borderColor: barColors, borderWidth: 1 }] },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (c) => `Total: ${c.parsed.y.toFixed(1)}%` } },
+          multiThresholdPlugin: {
+            lines: [
+              { yValue: 30, label: "30% 기준", color: HK.black, dash: [6,6], width: 2 },
+              { yValue: 10, label: "10% 기준", color: HK.warning, dash: [4,4], width: 2 }
+            ]
+          }
+        },
+        scales: { y: { beginAtZero: true, max: 100 } }
+      }
+    });
+  }
+
+  // 4) Pillar 누적 그래프 (시트 평균값 우선)
   const pillarCanvas = document.getElementById("reportPillarCumChart");
   if (pillarCanvas) {
     const ctx = pillarCanvas.getContext("2d");
